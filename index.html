@@ -1,1 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Part-Time Job & Money Manager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f8fb;
+        --card: #ffffff;
+        --accent: #6d5dfc;
+        --accent-soft: rgba(109, 93, 252, 0.12);
+        --text: #101828;
+        --muted: #475467;
+        --border: #e4e7ec;
+        --success: #22c55e;
+        --danger: #f97316;
+      }
 
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        padding: 32px;
+      }
+
+      @media (max-width: 600px) {
+        body {
+          padding: 20px 16px 80px;
+        }
+      }
+
+      .hero {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 32px;
+        border-radius: 24px;
+        background: radial-gradient(circle at top left, #dad6ff, #f9f5ff);
+        margin-bottom: 32px;
+      }
+
+      .hero-text h1 {
+        margin: 0 0 8px;
+        font-size: clamp(1.8rem, 4vw, 2.6rem);
+      }
+
+      .hero-text p {
+        margin: 0;
+        color: var(--muted);
+        max-width: 480px;
+      }
+
+      .hero-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+        min-width: 320px;
+      }
+
+      .stat-card {
+        background: var(--card);
+        padding: 16px;
+        border-radius: 18px;
+        border: 1px solid var(--border);
+      }
+
+      .stat-card small {
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 0.8rem;
+      }
+
+      .stat-card strong {
+        display: block;
+        font-size: 1.6rem;
+        margin-top: 6px;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 24px;
+      }
+
+      .panel {
+        background: var(--card);
+        border-radius: 24px;
+        padding: 24px;
+        border: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .panel-header h2 {
+        margin: 0;
+        font-size: 1.1rem;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+
+      .ghost-button {
+        border: 1px solid transparent;
+        background: var(--accent-soft);
+        color: var(--accent);
+        padding: 10px 16px;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: 0.2s ease;
+      }
+
+      .ghost-button:hover {
+        border-color: var(--accent);
+        background: rgba(109, 93, 252, 0.18);
+      }
+
+      .shift-list,
+      .ledger-list {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .shift-card,
+      .transaction-card {
+        border: 1px solid var(--border);
+        padding: 16px;
+        border-radius: 18px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+      }
+
+      .shift-card strong,
+      .transaction-card strong {
+        display: block;
+        font-size: 1.05rem;
+        margin-bottom: 2px;
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .time-tag {
+        background: var(--bg);
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+
+      .money {
+        font-weight: 600;
+      }
+
+      form {
+        display: grid;
+        gap: 12px;
+      }
+
+      label {
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: #fdfdfd;
+      }
+
+      .primary-button {
+        background: var(--accent);
+        color: white;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 14px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: 0.2s ease;
+      }
+
+      .primary-button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 20px rgba(109, 93, 252, 0.25);
+      }
+
+      .progress {
+        width: 100%;
+        height: 12px;
+        border-radius: 999px;
+        background: var(--bg);
+        overflow: hidden;
+      }
+
+      .progress span {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent), #56cfe1);
+      }
+
+      .ledger-split {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+      }
+
+      .ledger-list .transaction-card {
+        grid-template-columns: 1fr;
+      }
+
+      .transaction-card[data-type="expense"] {
+        border-color: rgba(249, 115, 22, 0.4);
+      }
+
+      .transaction-card[data-type="income"] {
+        border-color: rgba(34, 197, 94, 0.4);
+      }
+
+      .grid-two {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+      }
+
+      .inline {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 12px;
+      }
+
+      footer {
+        margin-top: 32px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero-text">
+        <h1>Part-Time Job & Money Manager</h1>
+        <p>
+          Track shifts, project weekly paychecks, and keep tabs on money goals
+          from a single lightweight dashboard. Perfect for side hustlers and
+          college jobs.
+        </p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card">
+          <small>Hours scheduled</small>
+          <strong id="hoursScheduled">0h</strong>
+        </div>
+        <div class="stat-card">
+          <small>Projected earnings</small>
+          <strong id="projectedEarnings">$0</strong>
+        </div>
+        <div class="stat-card">
+          <small>Net this month</small>
+          <strong id="netIncome">$0</strong>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel">
+        <div class="panel-header">
+          <h2>This Week's Shifts</h2>
+          <button class="ghost-button" type="button" id="shiftToggle">
+            + Add shift
+          </button>
+        </div>
+        <div class="shift-list" id="shiftList"></div>
+        <form id="shiftForm" hidden>
+          <div class="grid-two">
+            <label>
+              Role
+              <input name="role" placeholder="Barista" required />
+            </label>
+            <label>
+              Location
+              <input name="location" placeholder="Bean House" required />
+            </label>
+          </div>
+          <div class="inline">
+            <label>
+              Day
+              <select name="day" required>
+                <option>Mon</option>
+                <option>Tue</option>
+                <option>Wed</option>
+                <option>Thu</option>
+                <option>Fri</option>
+                <option>Sat</option>
+                <option>Sun</option>
+              </select>
+            </label>
+            <label>
+              Start
+              <input type="time" name="start" required />
+            </label>
+            <label>
+              End
+              <input type="time" name="end" required />
+            </label>
+            <label>
+              Hourly rate ($)
+              <input type="number" name="hourly" min="1" step="1" value="20" required />
+            </label>
+          </div>
+          <button class="primary-button" type="submit">Save shift</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Money Tracker</h2>
+          <button class="ghost-button" type="button" id="moneyToggle">
+            + Add entry
+          </button>
+        </div>
+        <div class="ledger-split">
+          <div>
+            <h3>Income</h3>
+            <div class="ledger-list" id="incomeList"></div>
+          </div>
+          <div>
+            <h3>Expenses</h3>
+            <div class="ledger-list" id="expenseList"></div>
+          </div>
+        </div>
+        <form id="moneyForm" hidden>
+          <div class="inline">
+            <label>
+              Type
+              <select name="type">
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </select>
+            </label>
+            <label>
+              Amount ($)
+              <input type="number" name="amount" min="1" step="1" required />
+            </label>
+            <label>
+              Date
+              <input type="date" name="date" required />
+            </label>
+          </div>
+          <label>
+            Description
+            <input name="label" placeholder="Friday tips" required />
+          </label>
+          <button class="primary-button" type="submit">Save entry</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Goal Progress</h2>
+          <span class="time-tag" id="goalTag">$0 / $500 saved</span>
+        </div>
+        <p class="meta">
+          Convert your part-time payout into consistent savings. Track progress
+          toward a flexible goal (default $500) and keep an eye on upcoming
+          recurring expenses.
+        </p>
+        <div class="progress">
+          <span id="goalProgress" style="width: 0%"></span>
+        </div>
+        <div class="ledger-list" id="upcomingBills"></div>
+      </section>
+    </main>
+
+    <footer>
+      Built with semantic HTML, modern CSS, and a sprinkle of vanilla JS.
+    </footer>
+
+    <script>
+      const shifts = [
+        {
+          role: "Barista",
+          location: "Bean House",
+          day: "Mon",
+          start: "07:00",
+          end: "11:00",
+          hourly: 22,
+        },
+        {
+          role: "Host",
+          location: "Rooftop Bistro",
+          day: "Wed",
+          start: "17:00",
+          end: "22:00",
+          hourly: 18,
+        },
+        {
+          role: "Tutor",
+          location: "Campus Lab",
+          day: "Sat",
+          start: "10:00",
+          end: "14:30",
+          hourly: 28,
+        },
+      ];
+
+      const ledger = [
+        { type: "income", label: "Cafe paycheck", amount: 220, date: "2025-11-21" },
+        { type: "income", label: "Tutoring", amount: 160, date: "2025-11-23" },
+        { type: "expense", label: "Transit pass", amount: 45, date: "2025-11-19" },
+        { type: "expense", label: "Snacks between shifts", amount: 18, date: "2025-11-20" },
+      ];
+
+      const bills = [
+        { label: "Phone bill", amount: 60, due: "Dec 3" },
+        { label: "Textbooks payment", amount: 95, due: "Dec 10" },
+        { label: "Shared rent", amount: 420, due: "Dec 15" },
+      ];
+
+      const shiftList = document.getElementById("shiftList");
+      const incomeList = document.getElementById("incomeList");
+      const expenseList = document.getElementById("expenseList");
+      const goalTag = document.getElementById("goalTag");
+      const goalProgress = document.getElementById("goalProgress");
+      const netIncome = document.getElementById("netIncome");
+      const hoursScheduled = document.getElementById("hoursScheduled");
+      const projectedEarnings = document.getElementById("projectedEarnings");
+      const upcomingBills = document.getElementById("upcomingBills");
+      const shiftForm = document.getElementById("shiftForm");
+      const moneyForm = document.getElementById("moneyForm");
+      const shiftToggle = document.getElementById("shiftToggle");
+      const moneyToggle = document.getElementById("moneyToggle");
+
+      const goal = 500;
+
+      const formatCurrency = (value) =>
+        new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+          maximumFractionDigits: 0,
+        }).format(value);
+
+      const getHours = (start, end) => {
+        const [sh, sm] = start.split(":").map(Number);
+        const [eh, em] = end.split(":").map(Number);
+        return (eh * 60 + em - (sh * 60 + sm)) / 60;
+      };
+
+      const renderShifts = () => {
+        shiftList.innerHTML = shifts
+          .sort((a, b) => a.day.localeCompare(b.day))
+          .map((shift) => {
+            const hours = getHours(shift.start, shift.end);
+            return `
+              <article class="shift-card">
+                <div>
+                  <strong>${shift.role}</strong>
+                  <p class="meta">${shift.location} • ${shift.day}
+                    <span class="time-tag">${shift.start} – ${shift.end}</span>
+                  </p>
+                </div>
+                <div class="money">${formatCurrency(hours * shift.hourly)}</div>
+              </article>
+            `;
+          })
+          .join("");
+      };
+
+      const renderLedger = () => {
+        incomeList.innerHTML = ledger
+          .filter((item) => item.type === "income")
+          .map(
+            (item) => `
+            <article class="transaction-card" data-type="income">
+              <div>
+                <strong>${item.label}</strong>
+                <p class="meta">${new Date(item.date).toLocaleDateString()}</p>
+              </div>
+              <div class="money">+${formatCurrency(item.amount)}</div>
+            </article>
+          `
+          )
+          .join("");
+
+        expenseList.innerHTML = ledger
+          .filter((item) => item.type === "expense")
+          .map(
+            (item) => `
+            <article class="transaction-card" data-type="expense">
+              <div>
+                <strong>${item.label}</strong>
+                <p class="meta">${new Date(item.date).toLocaleDateString()}</p>
+              </div>
+              <div class="money">-${formatCurrency(item.amount)}</div>
+            </article>
+          `
+          )
+          .join("");
+      };
+
+      const renderStats = () => {
+        const hours = shifts.reduce(
+          (total, shift) => total + getHours(shift.start, shift.end),
+          0
+        );
+        const earnings = shifts.reduce(
+          (total, shift) => total + getHours(shift.start, shift.end) * shift.hourly,
+          0
+        );
+        const income = ledger
+          .filter((item) => item.type === "income")
+          .reduce((total, item) => total + item.amount, 0);
+        const expenses = ledger
+          .filter((item) => item.type === "expense")
+          .reduce((total, item) => total + item.amount, 0);
+
+        hoursScheduled.textContent = `${hours.toFixed(1)}h`;
+        projectedEarnings.textContent = formatCurrency(earnings);
+        const net = income - expenses;
+        netIncome.textContent = formatCurrency(net);
+        goalTag.textContent = `${formatCurrency(net)} / ${formatCurrency(goal)} saved`;
+        const progress = Math.min(100, (net / goal) * 100);
+        goalProgress.style.width = `${progress}%`;
+      };
+
+      const renderBills = () => {
+        upcomingBills.innerHTML = bills
+          .map(
+            (bill) => `
+            <article class="transaction-card" data-type="expense">
+              <div>
+                <strong>${bill.label}</strong>
+                <p class="meta">Due ${bill.due}</p>
+              </div>
+              <div class="money">${formatCurrency(bill.amount)}</div>
+            </article>
+          `
+          )
+          .join("");
+      };
+
+      shiftForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const formData = new FormData(shiftForm);
+        shifts.push({
+          role: formData.get("role"),
+          location: formData.get("location"),
+          day: formData.get("day"),
+          start: formData.get("start"),
+          end: formData.get("end"),
+          hourly: Number(formData.get("hourly")),
+        });
+        shiftForm.reset();
+        shiftForm.hidden = true;
+        renderShifts();
+        renderStats();
+      });
+
+      moneyForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const formData = new FormData(moneyForm);
+        ledger.push({
+          type: formData.get("type"),
+          amount: Number(formData.get("amount")),
+          date: formData.get("date"),
+          label: formData.get("label"),
+        });
+        moneyForm.reset();
+        moneyForm.hidden = true;
+        renderLedger();
+        renderStats();
+      });
+
+      shiftToggle.addEventListener("click", () => {
+        shiftForm.hidden = !shiftForm.hidden;
+      });
+
+      moneyToggle.addEventListener("click", () => {
+        moneyForm.hidden = !moneyForm.hidden;
+      });
+
+      renderShifts();
+      renderLedger();
+      renderStats();
+      renderBills();
+    </script>
+  </body>
+</html>
