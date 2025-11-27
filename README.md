@@ -3,11 +3,12 @@
 Client-side HTML/CSS/JS dashboard for logging part-time shifts, recurring templates, income, expenses, reminders, analytics, and a calendar synced with Firebase Realtime Database.
 
 ## Setup
-1. Create a Firebase project and enable the Realtime Database (in test mode if this is a personal tool).
-2. From **Project Settings → General → SDK setup**, copy the Firebase config JSON snippet.
-3. Open `index.html` in a modern browser (or serve via `npx serve .`).
-4. Paste the config JSON into the textarea at the top of the page and click **Connect**.
-5. After connecting, data will stay synced with Firebase and cached locally for offline viewing.
+1. Open `index.html` in a modern browser (or serve via `npx serve .`).
+2. Firebase is already configured and will connect automatically.
+3. Start using the app immediately - all data syncs to Firebase in real-time.
+4. Data is also cached locally for offline viewing.
+
+**Note:** The app uses Firebase Realtime Database. If you want to use your own Firebase project, update the `firebaseConfig` object in `index.html`.
 
 ## Firebase Data Shape
 ```
@@ -28,6 +29,10 @@ Client-side HTML/CSS/JS dashboard for logging part-time shifts, recurring templa
 - **Local cache**: reload page before reconnecting—cached data should appear immediately; Firebase config textarea prefilled.
 - **Validation**: entering zero/negative durations or amounts shows inline alerts and prevents submission.
 
+## Usage Guide
+See [USAGE.md](USAGE.md) for detailed instructions on how to use all features of the app.
+
 ## Notes
 - Notifications require HTTPS context; desktop browsers may block alerts when the tab is unfocused.
 - All data is stored in Firebase; delete nodes in the console to reset the app.
+- The app works offline - data is cached locally and syncs when connection is restored.

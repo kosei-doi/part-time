@@ -9,14 +9,12 @@ const dom = {
   shiftList: document.getElementById('shift-list'),
   recurringForm: document.getElementById('recurring-form'),
   recurringList: document.getElementById('recurring-list'),
-  incomeForm: document.getElementById('income-form'),
-  expenseForm: document.getElementById('expense-form'),
-  financeList: document.getElementById('finance-list'),
   reminderForm: document.getElementById('reminder-form'),
   reminderList: document.getElementById('reminder-list'),
+  jobForm: document.getElementById('job-form'),
+  jobList: document.getElementById('job-list'),
   summaryHours: document.getElementById('summary-hours'),
   summaryIncome: document.getElementById('summary-income'),
-  summaryExpenses: document.getElementById('summary-expenses'),
   summaryDetails: document.getElementById('summary-details'),
   calendarMonth: document.getElementById('calendar-month'),
   calendarGrid: document.getElementById('calendar-grid'),
@@ -35,7 +33,11 @@ const dom = {
   modalCancel: document.querySelector('.modal-cancel'),
   modalShiftDate: document.getElementById('modal-shift-date'),
   modalShiftStart: document.getElementById('modal-shift-start'),
+  modalShiftStartHour: document.getElementById('modal-shift-start-hour'),
+  modalShiftStartMinute: document.getElementById('modal-shift-start-minute'),
   modalShiftEnd: document.getElementById('modal-shift-end'),
+  modalShiftEndHour: document.getElementById('modal-shift-end-hour'),
+  modalShiftEndMinute: document.getElementById('modal-shift-end-minute'),
   modalShiftRate: document.getElementById('modal-shift-rate'),
   modalShiftRole: document.getElementById('modal-shift-role'),
   modalShiftNotes: document.getElementById('modal-shift-notes'),
@@ -52,6 +54,7 @@ const firebasePaths = {
   income: '/income',
   expenses: '/expenses',
   reminders: '/reminders',
+  jobs: '/jobs',
 };
 
 const STORAGE_KEYS = {
@@ -68,12 +71,15 @@ const appState = {
   income: {},
   expenses: {},
   reminders: {},
+  jobs: {},
   calendarCursor: DateTime.now().startOf('month'),
 };
 
 const charts = {
   incomeExpense: null,
   hours: null,
+  monthlyIncome: null,
+  yearlyIncome: null,
 };
 
 const reminderTimers = new Map();
@@ -99,12 +105,7 @@ function checkFirebase() {
 
 // Prevent browser extension interference
 function preventExtensionInterference() {
-  const allInputs = document.querySelectorAll('input, select, textarea');
-  allInputs.forEach(input => {
-    input.setAttribute('autocomplete', 'off');
-    input.setAttribute('data-form-type', 'other');
-  });
-  
+  // エラーハンドリングのみ残す（入力フィールドへの干渉は削除）
   window.addEventListener('error', function(e) {
     if (e.filename && e.filename.includes('content_script.js')) {
       e.preventDefault();
@@ -117,6 +118,23 @@ function preventExtensionInterference() {
     if (e.reason && e.reason.stack && e.reason.stack.includes('content_script')) {
       e.preventDefault();
       return true;
+    }
+  });
+}
+
+// 入力フィールドを有効化する関数
+function enableInputFields(container = document) {
+  const inputs = container.querySelectorAll('input:not([type="hidden"]), select, textarea');
+  inputs.forEach(input => {
+    input.removeAttribute('readonly');
+    input.removeAttribute('disabled');
+    input.removeAttribute('autocomplete');
+    input.style.pointerEvents = 'auto';
+    input.style.userSelect = 'auto';
+    input.style.webkitUserSelect = 'auto';
+    // 入力フィールドがクリック可能であることを確認
+    if (input.tagName === 'INPUT' || input.tagName === 'SELECT' || input.tagName === 'TEXTAREA') {
+      input.setAttribute('tabindex', '0');
     }
   });
 }
@@ -140,7 +158,7 @@ function init() {
 // Event Listeners
 function attachEventListeners() {
   // Tab switching
-  document.querySelectorAll('.tab-button').forEach((button) => {
+  document.querySelectorAll('.tab-btn').forEach((button) => {
     button.addEventListener('click', (e) => {
       e.preventDefault();
       const tabName = button.dataset.tab;
@@ -150,9 +168,8 @@ function attachEventListeners() {
 
   // Forms
   dom.recurringForm?.addEventListener('submit', handleRecurringSubmit);
-  dom.incomeForm?.addEventListener('submit', (e) => handleFinanceSubmit(e, 'income'));
-  dom.expenseForm?.addEventListener('submit', (e) => handleFinanceSubmit(e, 'expenses'));
   dom.reminderForm?.addEventListener('submit', handleReminderSubmit);
+  dom.jobForm?.addEventListener('submit', handleJobSubmit);
   dom.workSettingsForm?.addEventListener('submit', (e) => {
     e.preventDefault();
     saveWorkSettings();
@@ -179,7 +196,14 @@ function attachEventListeners() {
   dom.modalClose?.addEventListener('click', closeShiftModal);
   dom.modalCancel?.addEventListener('click', closeShiftModal);
   dom.shiftModal?.addEventListener('click', (e) => {
-    if (e.target === dom.shiftModal) closeShiftModal();
+    // 入力フィールドやフォーム要素のクリックは無視
+    if (e.target.closest('input, select, textarea, form, button, .modal-content')) {
+      return;
+    }
+    // モーダルの背景のみクリックで閉じる
+    if (e.target === dom.shiftModal) {
+      closeShiftModal();
+    }
   });
   dom.modalDeleteBtn?.addEventListener('click', async () => {
     const shiftId = dom.calendarShiftForm?.dataset.editId;
@@ -189,24 +213,139 @@ function attachEventListeners() {
     }
   });
   dom.calendarShiftForm?.addEventListener('submit', handleCalendarShiftSubmit);
+  
+  // 職場選択時に時給を自動設定
+  if (dom.modalShiftRole) {
+    dom.modalShiftRole.addEventListener('change', (e) => {
+      const selectedRole = e.target.value;
+      if (selectedRole && dom.modalShiftRate) {
+        const job = getJobByName(selectedRole);
+        if (job && job.rate) {
+          dom.modalShiftRate.value = job.rate;
+        }
+      }
+    });
+  }
+  
+  // 時間選択の初期化
+  initializeTimeSelects();
+  
+  // 時間と分のセレクトボックスの変更時にhidden inputに値を設定
+  if (dom.modalShiftStartHour && dom.modalShiftStartMinute) {
+    dom.modalShiftStartHour.addEventListener('change', updateTimeValue);
+    dom.modalShiftStartMinute.addEventListener('change', updateTimeValue);
+  }
+  if (dom.modalShiftEndHour && dom.modalShiftEndMinute) {
+    dom.modalShiftEndHour.addEventListener('change', updateTimeValue);
+    dom.modalShiftEndMinute.addEventListener('change', updateTimeValue);
+  }
+}
+
+// 時間選択の初期化（15分単位）
+function initializeTimeSelects() {
+  // 時間のオプション（0-23時）
+  const hourOptions = Array.from({ length: 24 }, (_, i) => {
+    const hour = i.toString().padStart(2, '0');
+    return `<option value="${hour}">${i}</option>`;
+  }).join('');
+  
+  // 分のオプション（0, 15, 30, 45分）
+  const minuteOptions = ['00', '15', '30', '45'].map(m => {
+    return `<option value="${m}">${m}</option>`;
+  }).join('');
+  
+  // 開始時間のセレクトボックスにオプションを追加
+  if (dom.modalShiftStartHour) {
+    dom.modalShiftStartHour.innerHTML = '<option value="">時</option>' + hourOptions;
+  }
+  if (dom.modalShiftStartMinute) {
+    dom.modalShiftStartMinute.innerHTML = '<option value="">分</option>' + minuteOptions;
+  }
+  
+  // 終了時間のセレクトボックスにオプションを追加
+  if (dom.modalShiftEndHour) {
+    dom.modalShiftEndHour.innerHTML = '<option value="">時</option>' + hourOptions;
+  }
+  if (dom.modalShiftEndMinute) {
+    dom.modalShiftEndMinute.innerHTML = '<option value="">分</option>' + minuteOptions;
+  }
+}
+
+// 時間と分のセレクトボックスからhidden inputに値を設定
+function updateTimeValue(e) {
+  const isStart = e.target.id.includes('start');
+  const hourSelect = isStart ? dom.modalShiftStartHour : dom.modalShiftEndHour;
+  const minuteSelect = isStart ? dom.modalShiftStartMinute : dom.modalShiftEndMinute;
+  const hiddenInput = isStart ? dom.modalShiftStart : dom.modalShiftEnd;
+  
+  if (!hourSelect || !minuteSelect || !hiddenInput) return;
+  
+  const hour = hourSelect.value;
+  const minute = minuteSelect.value;
+  
+  if (hour && minute) {
+    hiddenInput.value = `${hour}:${minute}`;
+  } else {
+    hiddenInput.value = '';
+  }
+}
+
+// HH:MM形式の時間を時間と分のセレクトボックスに設定
+function setTimeSelects(timeString, isStart = true) {
+  if (!timeString || !timeString.includes(':')) {
+    const hourSelect = isStart ? dom.modalShiftStartHour : dom.modalShiftEndHour;
+    const minuteSelect = isStart ? dom.modalShiftStartMinute : dom.modalShiftEndMinute;
+    if (hourSelect) hourSelect.value = '';
+    if (minuteSelect) minuteSelect.value = '';
+    return;
+  }
+  
+  const [hour, minute] = timeString.split(':');
+  const hourSelect = isStart ? dom.modalShiftStartHour : dom.modalShiftEndHour;
+  const minuteSelect = isStart ? dom.modalShiftStartMinute : dom.modalShiftEndMinute;
+  
+  if (hourSelect) {
+    // 15分単位に丸める
+    let roundedMinute = '00';
+    const min = parseInt(minute, 10);
+    if (min < 8) roundedMinute = '00';
+    else if (min < 23) roundedMinute = '15';
+    else if (min < 38) roundedMinute = '30';
+    else if (min < 53) roundedMinute = '45';
+    else {
+      // 53分以上は次の時間に繰り上げ
+      const nextHour = (parseInt(hour, 10) + 1) % 24;
+      hourSelect.value = nextHour.toString().padStart(2, '0');
+      minuteSelect.value = '00';
+      if (isStart && dom.modalShiftStart) dom.modalShiftStart.value = `${nextHour.toString().padStart(2, '0')}:00`;
+      if (!isStart && dom.modalShiftEnd) dom.modalShiftEnd.value = `${nextHour.toString().padStart(2, '0')}:00`;
+      return;
+    }
+    
+    hourSelect.value = hour.padStart(2, '0');
+    if (minuteSelect) minuteSelect.value = roundedMinute;
+    
+    // hidden inputにも設定
+    const hiddenInput = isStart ? dom.modalShiftStart : dom.modalShiftEnd;
+    if (hiddenInput) hiddenInput.value = `${hour.padStart(2, '0')}:${roundedMinute}`;
+  }
 }
 
 function renderPlaceholders() {
   if (dom.shiftList) dom.shiftList.innerHTML = '<div class="placeholder">No shifts yet.</div>';
   if (dom.recurringList) dom.recurringList.innerHTML = '<div class="placeholder">No templates yet.</div>';
-  if (dom.financeList) dom.financeList.innerHTML = '<div class="placeholder">No income or expenses yet.</div>';
   if (dom.reminderList) dom.reminderList.innerHTML = '<div class="placeholder">No reminders yet.</div>';
 }
 
 function switchTab(tabName) {
-  document.querySelectorAll('.tab-button').forEach((btn) => {
+  document.querySelectorAll('.tab-btn').forEach((btn) => {
     const isActive = btn.dataset.tab === tabName;
     btn.classList.toggle('active', isActive);
     btn.setAttribute('aria-selected', isActive);
   });
 
-  document.querySelectorAll('.tab-panel').forEach((panel) => {
-    panel.classList.toggle('active', panel.dataset.tab === tabName);
+  document.querySelectorAll('.tab-content').forEach((panel) => {
+    panel.classList.toggle('active', panel.id === `${tabName}-tab`);
   });
 
   if (tabName === 'calendar') {
@@ -306,12 +445,14 @@ async function handleFinanceSubmit(event, collectionKey) {
     return;
   }
   
-  const form = collectionKey === 'income' ? dom.incomeForm : dom.expenseForm;
+  if (collectionKey !== 'income') return;
+  
+  const form = dom.incomeForm;
   const data = Object.fromEntries(new FormData(form));
-  const amount = +(Number(data.amount) || 0).toFixed(2);
+  const amount = Math.round(Number(data.amount) || 0);
   
   if (amount <= 0) {
-    alert('Amount must be greater than zero.');
+    alert('金額は0より大きい値を入力してください。');
     return;
   }
   
@@ -319,7 +460,7 @@ async function handleFinanceSubmit(event, collectionKey) {
     date: data.date,
     amount,
     category: data.category || '',
-    type: collectionKey === 'income' ? 'income' : 'expense',
+    type: 'income',
     updatedAt: Date.now(),
     createdAt: form.dataset.editId 
       ? (appState[collectionKey][form.dataset.editId]?.createdAt || Date.now())
@@ -365,6 +506,35 @@ async function handleReminderSubmit(event) {
   if (dom.reminderForm.dataset.editId) delete dom.reminderForm.dataset.editId;
 }
 
+async function handleJobSubmit(event) {
+  event.preventDefault();
+  if (!isFirebaseEnabled) {
+    alert('Firebase is not connected.');
+    return;
+  }
+  
+  const data = Object.fromEntries(new FormData(dom.jobForm));
+  
+  if (!data.name || data.name.trim() === '') {
+    alert('職場名を入力してください。');
+    return;
+  }
+  
+  const payload = {
+    name: data.name.trim(),
+    rate: data.rate ? Number(data.rate) : 0,
+    updatedAt: Date.now(),
+    createdAt: dom.jobForm.dataset.editId 
+      ? (appState.jobs[dom.jobForm.dataset.editId]?.createdAt || Date.now())
+      : Date.now(),
+  };
+  
+  const id = dom.jobForm.dataset.editId;
+  await saveEntity('jobs', payload, id);
+  dom.jobForm.reset();
+  if (dom.jobForm.dataset.editId) delete dom.jobForm.dataset.editId;
+}
+
 async function handleCalendarShiftSubmit(event) {
   event.preventDefault();
   if (!isFirebaseEnabled) {
@@ -372,40 +542,55 @@ async function handleCalendarShiftSubmit(event) {
     return;
   }
   
+  // 時間と分のセレクトボックスからhidden inputに値を設定
+  if (dom.modalShiftStartHour && dom.modalShiftStartMinute && dom.modalShiftStart) {
+    const hour = dom.modalShiftStartHour.value;
+    const minute = dom.modalShiftStartMinute.value;
+    if (hour && minute) {
+      dom.modalShiftStart.value = `${hour}:${minute}`;
+    }
+  }
+  if (dom.modalShiftEndHour && dom.modalShiftEndMinute && dom.modalShiftEnd) {
+    const hour = dom.modalShiftEndHour.value;
+    const minute = dom.modalShiftEndMinute.value;
+    if (hour && minute) {
+      dom.modalShiftEnd.value = `${hour}:${minute}`;
+    }
+  }
+  
   const data = Object.fromEntries(new FormData(dom.calendarShiftForm));
   
   if (!data.start || !data.end) {
-    alert('Please enter both start and end times.');
+    alert('開始時間と終了時間を入力してください。');
     return;
   }
   
   if (!data.role || data.role.trim() === '') {
-    const workSettings = getWorkSettings();
-    if (workSettings.workLocation) {
-      data.role = workSettings.workLocation;
-    } else {
-      alert('Please enter a work location/role.');
-      return;
-    }
+    alert('職場を選択してください。');
+    return;
   }
   
   const start = DateTime.fromISO(`${data.date}T${data.start}`);
   const end = DateTime.fromISO(`${data.date}T${data.end}`);
   
   if (!start.isValid || !end.isValid || end <= start) {
-    alert('Please enter a valid time range.');
+    alert('有効な時間範囲を入力してください。');
     return;
   }
   
   const durationHours = end.diff(start, 'hours').hours;
+  const workSettings = getWorkSettings();
   let rate = Number(data.rate) || 0;
   
-  if (rate <= 0) {
-    const workSettings = getWorkSettings();
-    if (workSettings.defaultWage) {
+  // 職場から時給を取得
+  if (rate <= 0 && data.role) {
+    const job = getJobByName(data.role.trim());
+    if (job && job.rate) {
+      rate = Number(job.rate);
+    } else if (workSettings.defaultWage) {
       rate = Number(workSettings.defaultWage);
     } else {
-      alert('Please enter an hourly rate.');
+      alert('時給を設定してください。');
       return;
     }
   }
@@ -492,13 +677,11 @@ function startEdit(collectionKey, id) {
       }
       break;
     case 'income':
-    case 'expenses':
-      const form = collectionKey === 'income' ? dom.incomeForm : dom.expenseForm;
-      if (form) {
-        form.date.value = data.date;
-        form.amount.value = data.amount;
-        form.category.value = data.category || '';
-        form.dataset.editId = id;
+      if (dom.incomeForm) {
+        dom.incomeForm.date.value = data.date;
+        dom.incomeForm.amount.value = data.amount;
+        dom.incomeForm.category.value = data.category || '';
+        dom.incomeForm.dataset.editId = id;
       }
       break;
     case 'reminders':
@@ -508,6 +691,13 @@ function startEdit(collectionKey, id) {
         dom.reminderForm.message.value = data.message || '';
         dom.reminderForm.lead.value = data.lead ?? 30;
         dom.reminderForm.dataset.editId = id;
+      }
+      break;
+    case 'jobs':
+      if (dom.jobForm) {
+        dom.jobForm.name.value = data.name || '';
+        dom.jobForm.rate.value = data.rate || '';
+        dom.jobForm.dataset.editId = id;
       }
       break;
   }
@@ -543,8 +733,8 @@ function detachRealtimeListeners() {
 function refreshUI() {
   renderShiftList();
   renderRecurringList();
-  renderFinanceList();
   renderReminderList();
+  renderJobList();
   const aggregates = computeAggregates();
   renderSummary(aggregates);
   updateCharts(aggregates);
@@ -557,9 +747,6 @@ function computeAggregates() {
     shiftIncome: 0,
     manualIncome: 0,
     totalIncome: 0,
-    totalExpenses: 0,
-    net: 0,
-    expenseCategories: new Map(),
     weekBuckets: new Map(),
     weekdayHours: Array(7).fill(0),
   };
@@ -579,19 +766,7 @@ function computeAggregates() {
     bucketWeek(income.date, amount, 0, totals.weekBuckets);
   });
 
-  Object.values(appState.expenses || {}).forEach((expense) => {
-    const amount = Number(expense.amount) || 0;
-    totals.totalExpenses += amount;
-    bucketWeek(expense.date, 0, amount, totals.weekBuckets);
-    const category = expense.category?.trim() || 'General';
-    totals.expenseCategories.set(
-      category,
-      (totals.expenseCategories.get(category) || 0) + amount
-    );
-  });
-
   totals.totalIncome = totals.shiftIncome + totals.manualIncome;
-  totals.net = totals.totalIncome - totals.totalExpenses;
   return totals;
 }
 
@@ -608,7 +783,6 @@ function bucketWeek(date, income, expense, map) {
     order: start.toMillis(),
   };
   bucket.income += income;
-  bucket.expense += expense;
   map.set(key, bucket);
 }
 
@@ -619,25 +793,256 @@ function bucketWeekday(date, hours, array) {
   array[dt.weekday % 7] += hours;
 }
 
+function computeMonthlyIncome() {
+  const monthlyMap = new Map();
+  
+  Object.values(appState.shifts || {}).forEach((shift) => {
+    if (!shift.date) return;
+    const dt = DateTime.fromISO(shift.date);
+    if (!dt.isValid) return;
+    
+    const monthKey = dt.toFormat('yyyy-MM');
+    const pay = Number(shift.totalPay) || 0;
+    
+    if (!monthlyMap.has(monthKey)) {
+      monthlyMap.set(monthKey, {
+        label: dt.toFormat('yyyy年M月'),
+        income: 0,
+        order: dt.startOf('month').toMillis(),
+      });
+    }
+    
+    const bucket = monthlyMap.get(monthKey);
+    bucket.income += pay;
+  });
+  
+  return Array.from(monthlyMap.values()).sort((a, b) => b.order - a.order);
+}
+
+function computeYearlyIncome() {
+  const yearlyMap = new Map();
+  
+  Object.values(appState.shifts || {}).forEach((shift) => {
+    if (!shift.date) return;
+    const dt = DateTime.fromISO(shift.date);
+    if (!dt.isValid) return;
+    
+    const yearKey = dt.toFormat('yyyy');
+    const pay = Number(shift.totalPay) || 0;
+    
+    if (!yearlyMap.has(yearKey)) {
+      yearlyMap.set(yearKey, {
+        label: `${yearKey}年`,
+        income: 0,
+        order: dt.startOf('year').toMillis(),
+      });
+    }
+    
+    const bucket = yearlyMap.get(yearKey);
+    bucket.income += pay;
+  });
+  
+  return Array.from(yearlyMap.values()).sort((a, b) => b.order - a.order);
+}
+
+function renderMonthlyIncome() {
+  const container = document.getElementById('monthly-income');
+  const chartCtx = document.getElementById('monthly-income-chart')?.getContext('2d');
+  
+  const monthlyData = computeMonthlyIncome();
+  
+  if (monthlyData.length === 0) {
+    if (container) container.innerHTML = '<div class="placeholder">データがありません</div>';
+    if (charts.monthlyIncome) {
+      charts.monthlyIncome.destroy();
+      charts.monthlyIncome = null;
+    }
+    return;
+  }
+  
+  // グラフを更新
+  if (chartCtx) {
+    const labels = monthlyData.map(item => item.label);
+    const data = monthlyData.map(item => Math.round(item.income));
+    
+    if (!charts.monthlyIncome) {
+      charts.monthlyIncome = new Chart(chartCtx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: '月別給料',
+            data: data,
+            backgroundColor: 'rgba(99, 102, 241, 0.8)',
+            borderColor: 'rgba(99, 102, 241, 1)',
+            borderWidth: 2,
+            borderRadius: 8,
+            borderSkipped: false,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return '¥' + Math.round(context.parsed.y).toLocaleString();
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return '¥' + Math.round(value).toLocaleString();
+                }
+              },
+              grid: {
+                color: 'rgba(0, 0, 0, 0.05)'
+              }
+            },
+            x: {
+              grid: {
+                display: false
+              }
+            }
+          }
+        }
+      });
+    } else {
+      charts.monthlyIncome.data.labels = labels;
+      charts.monthlyIncome.data.datasets[0].data = data;
+      charts.monthlyIncome.update();
+    }
+  }
+  
+  // リストも表示
+  if (container) {
+    container.innerHTML = monthlyData.map(item => `
+      <div class="income-item">
+        <span class="income-label">${item.label}</span>
+        <strong class="income-amount">¥${Math.round(item.income).toLocaleString()}</strong>
+      </div>
+    `).join('');
+  }
+}
+
+function renderYearlyIncome() {
+  const container = document.getElementById('yearly-income');
+  const chartCtx = document.getElementById('yearly-income-chart')?.getContext('2d');
+  
+  const yearlyData = computeYearlyIncome();
+  
+  if (yearlyData.length === 0) {
+    if (container) container.innerHTML = '<div class="placeholder">データがありません</div>';
+    if (charts.yearlyIncome) {
+      charts.yearlyIncome.destroy();
+      charts.yearlyIncome = null;
+    }
+    return;
+  }
+  
+  // グラフを更新
+  if (chartCtx) {
+    const labels = yearlyData.map(item => item.label);
+    const data = yearlyData.map(item => Math.round(item.income));
+    
+    if (!charts.yearlyIncome) {
+      charts.yearlyIncome = new Chart(chartCtx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: '年別給料',
+            data: data,
+            borderColor: 'rgba(99, 102, 241, 1)',
+            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+            borderWidth: 3,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return '¥' + Math.round(context.parsed.y).toLocaleString();
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return '¥' + Math.round(value).toLocaleString();
+                }
+              },
+              grid: {
+                color: 'rgba(0, 0, 0, 0.05)'
+              }
+            },
+            x: {
+              grid: {
+                display: false
+              }
+            }
+          }
+        }
+      });
+    } else {
+      charts.yearlyIncome.data.labels = labels;
+      charts.yearlyIncome.data.datasets[0].data = data;
+      charts.yearlyIncome.update();
+    }
+  }
+  
+  // リストも表示
+  if (container) {
+    container.innerHTML = yearlyData.map(item => `
+      <div class="income-item">
+        <span class="income-label">${item.label}</span>
+        <strong class="income-amount">¥${Math.round(item.income).toLocaleString()}</strong>
+      </div>
+    `).join('');
+  }
+}
+
 function renderSummary(aggregates) {
   if (dom.summaryHours) dom.summaryHours.textContent = aggregates.totalHours.toFixed(1);
-  if (dom.summaryIncome) dom.summaryIncome.textContent = `$${aggregates.totalIncome.toFixed(2)}`;
-  if (dom.summaryExpenses) dom.summaryExpenses.textContent = `$${aggregates.totalExpenses.toFixed(2)}`;
+  if (dom.summaryIncome) dom.summaryIncome.textContent = `¥${Math.round(aggregates.totalIncome).toLocaleString()}`;
 
-  const topExpense = [...aggregates.expenseCategories.entries()].sort((a, b) => b[1] - a[1])[0];
   const weeklyHours = aggregates.weekBuckets.size
     ? (aggregates.totalHours / Math.max(aggregates.weekBuckets.size, 1)).toFixed(1)
     : '0.0';
   
   if (dom.summaryDetails) {
     dom.summaryDetails.innerHTML = `
-      <span>Net Income: <strong>$${aggregates.net.toFixed(2)}</strong></span>
-      <span>Avg Weekly Hours: <strong>${weeklyHours} hrs</strong></span>
-      <span>Top Expense Category: <strong>${
-        topExpense ? `${topExpense[0]} ($${topExpense[1].toFixed(2)})` : 'n/a'
-      }</strong></span>
+      <span>週平均労働時間: <strong>${weeklyHours} 時間</strong></span>
     `;
   }
+  
+  // 月別・年別の給料を表示
+  renderMonthlyIncome();
+  renderYearlyIncome();
 }
 
 function updateCharts(aggregates) {
@@ -714,19 +1119,19 @@ function renderShiftList() {
   dom.shiftList.innerHTML = entries
     .sort(([, a], [, b]) => (a.date > b.date ? -1 : 1))
     .map(([id, shift]) => {
-      const pay = `$${Number(shift.totalPay || 0).toFixed(2)}`;
-      const hours = Number(shift.durationHours || 0).toFixed(2);
+      const pay = `¥${Math.round(Number(shift.totalPay || 0)).toLocaleString()}`;
+      const hours = Number(shift.durationHours || 0).toFixed(1);
       return `
         <article class="list-item">
           <header>
             <span>${shift.date} · ${shift.start}–${shift.end}</span>
             <span>${pay}</span>
           </header>
-          <p>${shift.role || 'Shift'} (${hours} hrs)</p>
+          <p>${shift.role || 'シフト'} (${hours} 時間)</p>
           ${shift.notes ? `<p class="muted">${shift.notes}</p>` : ''}
           <footer>
-            <button data-action="edit" data-collection="shifts" data-id="${id}">Edit</button>
-            <button data-action="delete" data-collection="shifts" data-id="${id}" class="danger">Delete</button>
+            <button data-action="edit" data-collection="shifts" data-id="${id}">編集</button>
+            <button data-action="delete" data-collection="shifts" data-id="${id}" class="danger">削除</button>
           </footer>
         </article>
       `;
@@ -764,32 +1169,27 @@ function renderFinanceList() {
   const incomes = Object.entries(appState.income || {}).map(([id, entry]) => ({
     id, collection: 'income', ...entry,
   }));
-  const expenses = Object.entries(appState.expenses || {}).map(([id, entry]) => ({
-    id, collection: 'expenses', ...entry,
-  }));
-  const combined = [...incomes, ...expenses];
   
   if (!dom.financeList) return;
   
-  if (!combined.length) {
-    dom.financeList.innerHTML = '<div class="placeholder">No income or expenses yet.</div>';
+  if (!incomes.length) {
+    dom.financeList.innerHTML = '<div class="placeholder">収入データがありません</div>';
     return;
   }
   
-  dom.financeList.innerHTML = combined
+  dom.financeList.innerHTML = incomes
     .sort((a, b) => (a.date > b.date ? -1 : 1))
     .map((entry) => {
-      const sign = entry.type === 'expense' ? '-' : '+';
-      const amount = Number(entry.amount || 0).toFixed(2);
+      const amount = Math.round(Number(entry.amount || 0));
       return `
         <article class="list-item">
           <header>
-            <span>${entry.date} · ${entry.category || 'General'}</span>
-            <span>${sign}$${amount}</span>
+            <span>${entry.date} · ${entry.category || 'その他'}</span>
+            <span>¥${amount.toLocaleString()}</span>
           </header>
           <footer>
-            <button data-action="edit" data-collection="${entry.collection}" data-id="${entry.id}">Edit</button>
-            <button data-action="delete" data-collection="${entry.collection}" data-id="${entry.id}" class="danger">Delete</button>
+            <button data-action="edit" data-collection="${entry.collection}" data-id="${entry.id}">編集</button>
+            <button data-action="delete" data-collection="${entry.collection}" data-id="${entry.id}" class="danger">削除</button>
           </footer>
         </article>
       `;
@@ -839,6 +1239,35 @@ function renderReminderList() {
   
   dom.reminderList.innerHTML = markup;
   scheduleReminders();
+}
+
+function renderJobList() {
+  const entries = Object.entries(appState.jobs || {});
+  if (!dom.jobList) return;
+  
+  if (!entries.length) {
+    dom.jobList.innerHTML = '<div class="placeholder">職場がまだ登録されていません。</div>';
+    return;
+  }
+  
+  dom.jobList.innerHTML = entries
+    .sort(([, a], [, b]) => a.name.localeCompare(b.name))
+    .map(([id, job]) => {
+      const rate = job.rate ? `¥${Math.round(Number(job.rate)).toLocaleString()}/時` : '時給未設定';
+      return `
+        <article class="list-item">
+          <header>
+            <span>${job.name}</span>
+            <span>${rate}</span>
+          </header>
+          <footer>
+            <button data-action="edit" data-collection="jobs" data-id="${id}">編集</button>
+            <button data-action="delete" data-collection="jobs" data-id="${id}" class="danger">削除</button>
+          </footer>
+        </article>
+      `;
+    })
+    .join('');
 }
 
 function formatRelativeMinutes(minutes) {
@@ -905,100 +1334,163 @@ function triggerReminder(reminder) {
 
 // Calendar
 function renderCalendar() {
+  const calendarEl = dom.calendarGrid;
+  if (!calendarEl) return;
+
   const month = appState.calendarCursor;
-  if (dom.calendarMonth) dom.calendarMonth.textContent = month.toFormat('LLLL yyyy');
+  if (dom.calendarMonth) {
+    dom.calendarMonth.textContent = month.toFormat('yyyy年M月');
+  }
 
   const startOfMonth = month.startOf('month');
   const startOfGrid = startOfMonth.startOf('week');
   const endOfMonth = month.endOf('month');
   const endOfGrid = endOfMonth.endOf('week');
-  
+
   const shiftsByDate = Object.entries(appState.shifts || {}).reduce((acc, [id, shift]) => {
     if (!shift.date) return acc;
     if (!acc[shift.date]) acc[shift.date] = [];
     acc[shift.date].push({ id, ...shift });
     return acc;
   }, {});
-  
-  const recurringTemplates = Object.entries(appState.recurring || {}).map(([id, template]) => ({ id, ...template }));
+
+  const recurringTemplates = Object.entries(appState.recurring || {}).map(([id, template]) => ({
+    id,
+    ...template,
+  }));
 
   const cells = [];
   let cursor = startOfGrid;
+
   while (cursor <= endOfGrid) {
     const dayId = cursor.toISODate();
     const weekdayIndex = cursor.weekday % 7;
     const shifts = shiftsByDate[dayId] || [];
-    
+
     const sortedShifts = [...shifts].sort((a, b) => {
       if (!a.start || !b.start) return 0;
       return a.start.localeCompare(b.start);
     });
-    
-    const shiftMarkup = sortedShifts.map((shift) => {
+
+    let shiftMarkup = sortedShifts.slice(0, 3).map((shift) => {
       const startTime = shift.start || '';
       const endTime = shift.end || '';
-      const role = shift.role || 'Shift';
+      const role = shift.role || 'シフト';
+      const timeDisplay = startTime && endTime ? `${startTime}-${endTime}` : startTime || '';
       const duration = shift.durationHours || 0;
       return `
-        <div class="shift-chip" data-shift-id="${shift.id}" title="${role} · ${startTime}-${endTime}">
-          <span class="shift-time">${startTime}${endTime ? `-${endTime}` : ''}</span>
+        <div class="shift-chip" data-shift-id="${shift.id}" title="${role} · ${timeDisplay}">
+          ${timeDisplay ? `<span class="shift-time">${timeDisplay}</span>` : ''}
           <span class="shift-role">${role}</span>
           ${duration > 0 ? `<span class="shift-duration">${duration.toFixed(1)}h</span>` : ''}
         </div>`;
     }).join('');
-    
-    const recurringMarkup = recurringTemplates
-      .filter((template) => Number(template.weekday) === weekdayIndex)
-      .map((template) => {
-        const startTime = template.start || '';
-        const duration = template.duration || 0;
-        return `
-        <div class="shift-chip recurring" title="Recurring template · ${startTime} · ${duration} hrs">
-          <span class="shift-time">${startTime}</span>
-          <span class="shift-role">Template</span>
-          ${duration > 0 ? `<span class="shift-duration">${duration}h</span>` : ''}
-        </div>`;
-      })
-      .join('');
+
+    if (sortedShifts.length > 3) {
+      shiftMarkup += `<div class="shift-chip" style="background: rgba(107,114,128,0.15); color: var(--text);">+${sortedShifts.length - 3}</div>`;
+    }
+
+    const recurringMarkup = sortedShifts.length === 0
+      ? recurringTemplates
+          .filter((template) => Number(template.weekday) === weekdayIndex)
+          .map((template) => {
+            const startTime = template.start || '';
+            const duration = template.duration || 0;
+            return `
+              <div class="shift-chip recurring" title="テンプレート · ${startTime}">
+                ${startTime ? `<span class="shift-time">${startTime}</span>` : ''}
+                <span class="shift-role">テンプレ</span>
+                ${duration ? `<span class="shift-duration">${duration}h</span>` : ''}
+              </div>`;
+          })
+          .join('')
+      : '';
 
     const isToday = cursor.toISODate() === DateTime.now().toISODate();
     const isCurrentMonth = cursor.month === month.month;
 
     cells.push(`
       <div class="calendar-cell ${!isCurrentMonth ? 'muted-cell' : ''} ${isToday ? 'today' : ''}" data-date="${dayId}">
-        <span class="cell-date ${isToday ? 'today-date' : ''}">${cursor.day}</span>
+        <div class="cell-date">${cursor.day}</div>
         <div class="shift-container">
           ${shiftMarkup || recurringMarkup ? `${shiftMarkup}${recurringMarkup}` : ''}
         </div>
       </div>
     `);
+
     cursor = cursor.plus({ days: 1 });
   }
 
-  if (dom.calendarGrid) {
-    dom.calendarGrid.innerHTML = cells.join('');
-    
-    dom.calendarGrid.querySelectorAll('.calendar-cell').forEach((cell) => {
-      cell.addEventListener('click', (e) => {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' || e.target.closest('input, select, textarea')) {
+  calendarEl.innerHTML = cells.join('');
+
+  calendarEl.querySelectorAll('.calendar-cell').forEach((cell) => {
+    cell.addEventListener('click', (e) => {
+      const shiftChip = e.target.closest('.shift-chip[data-shift-id]');
+      if (shiftChip) {
+        e.stopPropagation();
+        const shiftId = shiftChip.dataset.shiftId;
+        const shift = appState.shifts[shiftId];
+        if (shift) {
+          openShiftModal(shift.date, shiftId);
           return;
         }
-        
-        const shiftChip = e.target.closest('.shift-chip[data-shift-id]');
-        if (shiftChip) {
-          e.stopPropagation();
-          const shiftId = shiftChip.dataset.shiftId;
-          const shift = appState.shifts[shiftId];
-          if (shift) {
-            openShiftModal(shift.date, shiftId);
-            return;
-          }
-        }
-        
-        const date = cell.dataset.date;
-        if (date) openShiftModal(date);
-      });
+      }
+
+      const date = cell.dataset.date;
+      if (date) openShiftModal(date);
     });
+  });
+}
+
+function getUniqueRoles() {
+  const roles = new Set();
+  // まず設定済みの職場を追加（優先）
+  Object.values(appState.jobs || {}).forEach(job => {
+    if (job.name && job.name.trim()) {
+      roles.add(job.name.trim());
+    }
+  });
+  // 次に過去のシフトから職場を追加
+  Object.values(appState.shifts || {}).forEach(shift => {
+    if (shift.role && shift.role.trim()) {
+      roles.add(shift.role.trim());
+    }
+  });
+  const workSettings = getWorkSettings();
+  if (workSettings.workLocation) {
+    roles.add(workSettings.workLocation);
+  }
+  return Array.from(roles).sort();
+}
+
+function getJobByName(name) {
+  return Object.values(appState.jobs || {}).find(job => job.name === name);
+}
+
+function populateRoleSelect(selectedRole = '') {
+  if (!dom.modalShiftRole) return;
+  
+  const roles = getUniqueRoles();
+  dom.modalShiftRole.innerHTML = '<option value="">選択してください</option>';
+  
+  roles.forEach(role => {
+    const option = document.createElement('option');
+    option.value = role;
+    const job = getJobByName(role);
+    option.textContent = job && job.rate ? `${role} (¥${Math.round(Number(job.rate)).toLocaleString()}/時)` : role;
+    if (role === selectedRole) {
+      option.selected = true;
+    }
+    dom.modalShiftRole.appendChild(option);
+  });
+  
+  // 編集モードで、現在の職場がリストにない場合は追加
+  if (selectedRole && !roles.includes(selectedRole)) {
+    const option = document.createElement('option');
+    option.value = selectedRole;
+    option.textContent = selectedRole;
+    option.selected = true;
+    dom.modalShiftRole.appendChild(option);
   }
 }
 
@@ -1010,53 +1502,61 @@ function openShiftModal(date, shiftId = null) {
     if (dom.calendarShiftForm.dataset.editId) delete dom.calendarShiftForm.dataset.editId;
   }
   
+  // モーダル内の入力フィールドを有効化
+  enableInputFields(dom.shiftModal);
+  
   if (shiftId && appState.shifts[shiftId]) {
     const shift = appState.shifts[shiftId];
     if (dom.calendarShiftForm) dom.calendarShiftForm.dataset.editId = shiftId;
     if (dom.modalShiftDate) dom.modalShiftDate.value = shift.date || date;
-    if (dom.modalShiftStart) dom.modalShiftStart.value = shift.start || '';
-    if (dom.modalShiftEnd) dom.modalShiftEnd.value = shift.end || '';
+    
+    // 時間をセレクトボックスに設定
+    setTimeSelects(shift.start || '', true);
+    setTimeSelects(shift.end || '', false);
+    
     if (dom.modalShiftRate) dom.modalShiftRate.value = shift.rate || '';
-    if (dom.modalShiftRole) dom.modalShiftRole.value = shift.role || '';
     if (dom.modalShiftNotes) dom.modalShiftNotes.value = shift.notes || '';
     
+    populateRoleSelect(shift.role || '');
+    
     const modalTitle = dom.shiftModal.querySelector('.modal-header h2');
-    if (modalTitle) modalTitle.textContent = 'Edit Shift';
+    if (modalTitle) modalTitle.textContent = 'シフトを編集';
     if (dom.modalDeleteBtn) dom.modalDeleteBtn.style.display = 'block';
     
-    if (dom.startSuggestion) dom.startSuggestion.textContent = '';
-    if (dom.endSuggestion) dom.endSuggestion.textContent = '';
-    if (dom.rateSuggestion) dom.rateSuggestion.textContent = '';
-    if (dom.roleSuggestion) dom.roleSuggestion.textContent = '';
-    
     dom.shiftModal.classList.add('active');
+    
+    setTimeout(() => {
+      if (dom.modalShiftStartHour) {
+        dom.modalShiftStartHour.focus();
+      }
+    }, 100);
     return;
   }
   
   if (dom.modalShiftDate) dom.modalShiftDate.value = date;
   const modalTitle = dom.shiftModal.querySelector('.modal-header h2');
-  if (modalTitle) modalTitle.textContent = 'Add Shift';
+  if (modalTitle) modalTitle.textContent = 'シフトを追加';
   if (dom.modalDeleteBtn) dom.modalDeleteBtn.style.display = 'none';
   
   const suggestions = getSuggestions(date);
   const workSettings = getWorkSettings();
   
-  if (workSettings.workLocation && dom.modalShiftRole) {
-    dom.modalShiftRole.value = workSettings.workLocation;
-  } else if (suggestions.role && dom.modalShiftRole) {
-    dom.modalShiftRole.value = suggestions.role;
+  populateRoleSelect();
+  
+  // 過去のシフト履歴から候補を表示
+  renderShiftSuggestions(date);
+  
+  // デフォルト時間をセレクトボックスに設定
+  if (workSettings.defaultStartTime) {
+    setTimeSelects(workSettings.defaultStartTime, true);
+  } else if (suggestions.start) {
+    setTimeSelects(suggestions.start, true);
   }
   
-  if (workSettings.defaultStartTime && dom.modalShiftStart) {
-    dom.modalShiftStart.value = workSettings.defaultStartTime;
-  } else if (suggestions.start && dom.modalShiftStart) {
-    dom.modalShiftStart.value = suggestions.start;
-  }
-  
-  if (workSettings.defaultEndTime && dom.modalShiftEnd) {
-    dom.modalShiftEnd.value = workSettings.defaultEndTime;
-  } else if (suggestions.end && dom.modalShiftEnd) {
-    dom.modalShiftEnd.value = suggestions.end;
+  if (workSettings.defaultEndTime) {
+    setTimeSelects(workSettings.defaultEndTime, false);
+  } else if (suggestions.end) {
+    setTimeSelects(suggestions.end, false);
   }
   
   if (workSettings.defaultWage && dom.modalShiftRate) {
@@ -1065,43 +1565,128 @@ function openShiftModal(date, shiftId = null) {
     dom.modalShiftRate.value = suggestions.rate;
   }
   
-  const finalStart = dom.modalShiftStart?.value || suggestions.start;
-  const finalEnd = dom.modalShiftEnd?.value || suggestions.end;
-  const finalRate = dom.modalShiftRate?.value || suggestions.rate;
-  const finalRole = dom.modalShiftRole?.value || suggestions.role;
-  
-  if (dom.startSuggestion) {
-    dom.startSuggestion.textContent = finalStart ? `💡 ${workSettings.defaultStartTime ? 'From settings' : 'Suggested'}: ${finalStart}` : '';
-  }
-  if (dom.endSuggestion) {
-    dom.endSuggestion.textContent = finalEnd ? `💡 ${workSettings.defaultEndTime ? 'From settings' : 'Suggested'}: ${finalEnd}` : '';
-  }
-  if (dom.rateSuggestion) {
-    dom.rateSuggestion.textContent = finalRate ? `💡 ${workSettings.defaultWage ? 'From settings' : 'Suggested'}: $${finalRate}` : '';
-  }
-  if (dom.roleSuggestion) {
-    dom.roleSuggestion.textContent = finalRole ? `💡 ${workSettings.workLocation ? 'From settings' : 'Suggested'}: ${finalRole}` : '';
+  if (workSettings.workLocation && dom.modalShiftRole) {
+    dom.modalShiftRole.value = workSettings.workLocation;
+  } else if (suggestions.role && dom.modalShiftRole) {
+    dom.modalShiftRole.value = suggestions.role;
   }
   
   dom.shiftModal.classList.add('active');
   
   setTimeout(() => {
-    if (dom.modalShiftStart) dom.modalShiftStart.focus();
-  }, 100);
+    if (dom.modalShiftStart) {
+      dom.modalShiftStart.focus();
+      dom.modalShiftStart.click();
+    }
+  }, 150);
 }
 
 function closeShiftModal() {
   if (!dom.shiftModal) return;
   dom.shiftModal.classList.remove('active');
   if (dom.calendarShiftForm) {
+    // 時間セレクトボックスもリセット
+    if (dom.modalShiftStartHour) dom.modalShiftStartHour.value = '';
+    if (dom.modalShiftStartMinute) dom.modalShiftStartMinute.value = '';
+    if (dom.modalShiftEndHour) dom.modalShiftEndHour.value = '';
+    if (dom.modalShiftEndMinute) dom.modalShiftEndMinute.value = '';
+    if (dom.modalShiftStart) dom.modalShiftStart.value = '';
+    if (dom.modalShiftEnd) dom.modalShiftEnd.value = '';
     dom.calendarShiftForm.reset();
     if (dom.calendarShiftForm.dataset.editId) delete dom.calendarShiftForm.dataset.editId;
   }
   if (dom.modalDeleteBtn) dom.modalDeleteBtn.style.display = 'none';
-  if (dom.startSuggestion) dom.startSuggestion.textContent = '';
-  if (dom.endSuggestion) dom.endSuggestion.textContent = '';
-  if (dom.rateSuggestion) dom.rateSuggestion.textContent = '';
-  if (dom.roleSuggestion) dom.roleSuggestion.textContent = '';
+}
+
+function getShiftHistoryCandidates(date) {
+  const dt = DateTime.fromISO(date);
+  
+  // すべての過去のシフトを取得（最近60日以内）
+  const sixtyDaysAgo = dt.minus({ days: 60 });
+  const allShifts = Object.values(appState.shifts || {}).filter(s => {
+    if (!s.date || !s.start || !s.end || !s.role) return false;
+    const shiftDate = DateTime.fromISO(s.date);
+    return shiftDate < dt && shiftDate >= sixtyDaysAgo;
+  });
+  
+  if (allShifts.length === 0) return [];
+  
+  // 時間帯と職場の組み合わせでグループ化
+  const combinations = {};
+  allShifts.forEach(shift => {
+    const key = `${shift.start}-${shift.end}-${shift.role}`;
+    if (!combinations[key]) {
+      combinations[key] = {
+        start: shift.start,
+        end: shift.end,
+        role: shift.role,
+        rate: shift.rate || 0,
+        count: 0,
+        lastUsed: shift.date
+      };
+    }
+    combinations[key].count++;
+    if (shift.date > combinations[key].lastUsed) {
+      combinations[key].lastUsed = shift.date;
+    }
+  });
+  
+  // 使用回数と最終使用日の順でソート
+  const candidates = Object.values(combinations)
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return b.lastUsed.localeCompare(a.lastUsed);
+    })
+    .slice(0, 10); // 最大10つまで表示
+  
+  return candidates;
+}
+
+function renderShiftSuggestions(date) {
+  const suggestionsContainer = document.getElementById('shift-suggestions');
+  const suggestionsList = document.getElementById('suggestions-list');
+  
+  if (!suggestionsContainer || !suggestionsList) return;
+  
+  const candidates = getShiftHistoryCandidates(date);
+  
+  if (candidates.length === 0) {
+    suggestionsContainer.style.display = 'none';
+    return;
+  }
+  
+  suggestionsContainer.style.display = 'block';
+  suggestionsList.innerHTML = candidates.map((candidate, index) => {
+    const duration = candidate.end && candidate.start ? 
+      (() => {
+        const start = DateTime.fromISO(`2000-01-01T${candidate.start}`);
+        const end = DateTime.fromISO(`2000-01-01T${candidate.end}`);
+        const hours = end.diff(start, 'hours').hours;
+        return hours.toFixed(1);
+      })() : '';
+    
+    return `
+      <button type="button" class="suggestion-item" data-index="${index}">
+        <div class="suggestion-time">${candidate.start} - ${candidate.end}</div>
+        <div class="suggestion-info">
+          <span class="suggestion-role">${candidate.role}</span>
+          ${duration ? `<span class="suggestion-duration">${duration}時間</span>` : ''}
+          ${candidate.count > 1 ? `<span class="suggestion-count">${candidate.count}回</span>` : ''}
+        </div>
+      </button>
+    `;
+  }).join('');
+  
+  // 候補をクリックしたときのイベント
+  suggestionsList.querySelectorAll('.suggestion-item').forEach((button, index) => {
+    button.addEventListener('click', () => {
+      const candidate = candidates[index];
+      setTimeSelects(candidate.start || '', true);
+      setTimeSelects(candidate.end || '', false);
+      if (dom.modalShiftRole) dom.modalShiftRole.value = candidate.role;
+      if (dom.modalShiftRate && candidate.rate) dom.modalShiftRate.value = candidate.rate;
+    });
+  });
 }
 
 function getSuggestions(date) {

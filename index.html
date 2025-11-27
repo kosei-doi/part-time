@@ -1,285 +1,212 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Part-Time Tracker</title>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <header class="app-header compact">
-      <h1>Part-Time Tracker</h1>
-    </header>
-
-    <nav class="tabs" role="tablist">
-      <button class="tab-button active" data-tab="calendar" role="tab" aria-selected="true">Calendar</button>
-      <button class="tab-button" data-tab="finance" role="tab" aria-selected="false">Finance</button>
-      <button class="tab-button" data-tab="settings" role="tab" aria-selected="false">Settings</button>
-    </nav>
-
-    <main>
-      <!-- Calendar Tab (Main) -->
-      <section class="panel tab-panel active" id="calendar-panel" data-tab="calendar" role="tabpanel">
-        <div class="calendar-header">
-          <h2>Calendar</h2>
-          <div class="calendar-nav">
-            <button id="calendar-prev" aria-label="Previous month">◀</button>
-            <span id="calendar-month"></span>
-            <button id="calendar-next" aria-label="Next month">▶</button>
-          </div>
-        </div>
-        <div class="calendar-weekdays">
-          <div class="weekday-header">Sun</div>
-          <div class="weekday-header">Mon</div>
-          <div class="weekday-header">Tue</div>
-          <div class="weekday-header">Wed</div>
-          <div class="weekday-header">Thu</div>
-          <div class="weekday-header">Fri</div>
-          <div class="weekday-header">Sat</div>
-        </div>
-        <div id="calendar-grid" class="calendar-grid"></div>
-      </section>
-
-      <!-- Finance Tab -->
-      <section class="panel tab-panel" id="finance-panel" data-tab="finance" role="tabpanel">
-        <div class="summary-section">
-          <div class="grid three" id="summary-cards">
-            <article class="card">
-              <p>Total Hours</p>
-              <strong id="summary-hours">0</strong>
-            </article>
-            <article class="card">
-              <p>Income</p>
-              <strong id="summary-income">$0</strong>
-            </article>
-            <article class="card">
-              <p>Expenses</p>
-              <strong id="summary-expenses">$0</strong>
-            </article>
-          </div>
-          <div id="summary-details" class="summary-details"></div>
-        </div>
-
-        <h2>Add Entry</h2>
-        <form id="income-form" class="finance-form" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
-          <h3>Income</h3>
-          <label>
-            Date
-            <input type="date" name="date" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-          </label>
-          <label>
-            Amount
-            <input type="number" step="0.01" name="amount" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-          </label>
-          <label>
-            Category
-            <input type="text" name="category" placeholder="Salary" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
-          </label>
-          <button type="submit">Add Income</button>
-        </form>
-
-        <form id="expense-form" class="finance-form" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
-          <h3>Expense</h3>
-          <label>
-            Date
-            <input type="date" name="date" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-          </label>
-          <label>
-            Amount
-            <input type="number" step="0.01" name="amount" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-          </label>
-          <label>
-            Category
-            <input type="text" name="category" placeholder="Transport" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
-          </label>
-          <button type="submit">Add Expense</button>
-        </form>
-
-        <div class="list" id="finance-list"></div>
-      </section>
-
-      <!-- Settings Tab -->
-      <section class="panel tab-panel" id="settings-panel" data-tab="settings" role="tabpanel">
-        <h2>Settings</h2>
-        
-        <div class="settings-section">
-          <h3>Work Details</h3>
-          <form id="work-settings-form" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
-            <label>
-              Work Location
-              <input type="text" name="workLocation" id="work-location" placeholder="Company name or location" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
-            </label>
-            <label>
-              Default Hourly Wage
-              <input type="number" step="0.01" name="defaultWage" id="default-wage" placeholder="0.00" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
-            </label>
-            <label>
-              Default Start Time
-              <input type="time" name="defaultStartTime" id="default-start-time" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
-            </label>
-            <label>
-              Default End Time
-              <input type="time" name="defaultEndTime" id="default-end-time" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
-            </label>
-            <label>
-              Tax Rate (%)
-              <input type="number" step="0.01" name="taxRate" id="tax-rate" placeholder="0.00" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
-            </label>
-            <button type="submit">Save Settings</button>
-          </form>
-        </div>
-
-        <div class="settings-section">
-          <h3>Shifts</h3>
-          <div id="shift-list" class="list"></div>
-        </div>
-
-        <div class="settings-section">
-          <h3>Recurring Templates</h3>
-          <form id="recurring-form" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
-            <div class="grid two">
-              <label>
-                Weekday
-                <select name="weekday" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" required>
-                  <option value="0">Sunday</option>
-                  <option value="1">Monday</option>
-                  <option value="2">Tuesday</option>
-                  <option value="3">Wednesday</option>
-                  <option value="4">Thursday</option>
-                  <option value="5">Friday</option>
-                  <option value="6">Saturday</option>
-                </select>
-              </label>
-              <label>
-                Start Time
-                <input type="time" name="start" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-              </label>
-              <label>
-                Duration (hrs)
-                <input type="number" step="0.25" name="duration" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-              </label>
-              <label>
-                Hourly Rate
-                <input type="number" step="0.01" name="rate" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-              </label>
-            </div>
-            <button type="submit">Save Template</button>
-          </form>
-          <div id="recurring-list" class="list"></div>
-        </div>
-
-        <div class="settings-section">
-          <div class="panel-heading">
-            <h3>Reminders</h3>
-            <button type="button" id="enable-notifications">Enable Alerts</button>
-          </div>
-          <form id="reminder-form" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
-            <div class="grid two">
-              <label>
-                Date
-                <input type="date" name="date" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-              </label>
-              <label>
-                Time
-                <input type="time" name="time" value="09:00" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-              </label>
-              <label>
-                Message
-                <input type="text" name="message" placeholder="Follow up with manager" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-              </label>
-              <label>
-                Notify (mins before)
-                <input type="number" name="lead" value="30" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
-              </label>
-            </div>
-            <button type="submit">Add Reminder</button>
-          </form>
-          <div id="reminder-list" class="list"></div>
-        </div>
-      </section>
-    </main>
-
-    <!-- Shift Entry Modal -->
-    <div id="shift-modal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Add Shift</h2>
-          <button class="modal-close" aria-label="Close">&times;</button>
-        </div>
-        <form id="calendar-shift-form" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
-          <div class="grid two">
-            <label>
-              Date
-              <input type="date" name="date" id="modal-shift-date" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-            </label>
-            <label>
-              Start Time
-              <input type="time" name="start" id="modal-shift-start" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-              <small class="suggestion-hint" id="start-suggestion"></small>
-            </label>
-            <label>
-              End Time
-              <input type="time" name="end" id="modal-shift-end" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-              <small class="suggestion-hint" id="end-suggestion"></small>
-            </label>
-            <label>
-              Hourly Rate
-              <input type="number" step="0.01" name="rate" id="modal-shift-rate" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-              <small class="suggestion-hint" id="rate-suggestion"></small>
-            </label>
-            <label>
-              Location / Role <span style="color: var(--danger);">*</span>
-              <input type="text" name="role" id="modal-shift-role" placeholder="Front desk" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
-              <small class="suggestion-hint" id="role-suggestion"></small>
-            </label>
-            <label>
-              Notes
-              <input type="text" name="notes" id="modal-shift-notes" placeholder="Optional" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
-            </label>
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="modal-cancel">Cancel</button>
-            <button type="button" class="modal-delete danger" id="modal-delete-btn" style="display: none;">Delete</button>
-            <button type="submit">Save Shift</button>
-          </div>
-        </form>
-      </div>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="パートタイム勤務のシフトと給料を管理するアプリ">
+  <title>パートタイムトラッカー</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- ヘッダー -->
+  <header class="header">
+    <div class="container">
+      <h1 class="header-title">パートタイムトラッカー</h1>
     </div>
+  </header>
 
-    <!-- Firebase SDK (v11 - combiと同じパターン) -->
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-      import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-analytics.js";
-      import {
-        getDatabase,
-        ref,
-        set,
-        onValue,
-        push,
-        get,
-        remove
-      } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
+  <!-- タブナビゲーション -->
+  <nav class="tabs">
+    <div class="container">
+      <button class="tab-btn active" data-tab="calendar">カレンダー</button>
+      <button class="tab-btn" data-tab="finance">給料</button>
+      <button class="tab-btn" data-tab="settings">設定</button>
+    </div>
+  </nav>
 
-      const firebaseConfig = {
-        apiKey: "AIzaSyA2M27QaMYPaWK5A1-b2wwvICq5KNcTZt8",
-        authDomain: "planer-275c4.firebaseapp.com",
-        databaseURL: "https://planer-275c4-default-rtdb.firebaseio.com",
-        projectId: "planer-275c4",
-        storageBucket: "planer-275c4.firebasestorage.app",
-        messagingSenderId: "752551364905",
-        appId: "1:752551364905:web:07673595f83cea2c618f38",
-        measurementId: "G-12R593XP3D",
-      };
+  <!-- メインコンテンツ -->
+  <main class="main">
+    <div class="container">
+      
+      <!-- カレンダータブ -->
+      <section class="tab-content active" id="calendar-tab">
+        <div class="calendar-wrapper">
+          <div class="calendar-header">
+            <h2 class="calendar-title">カレンダー</h2>
+            <div class="calendar-controls">
+              <button class="btn-icon" id="calendar-prev" aria-label="前の月">‹</button>
+              <span class="calendar-month" id="calendar-month"></span>
+              <button class="btn-icon" id="calendar-next" aria-label="次の月">›</button>
+            </div>
+          </div>
 
-      const app = initializeApp(firebaseConfig);
-      const analytics = getAnalytics(app);
-      const db = getDatabase(app);
+          <div class="calendar-weekdays">
+            <div class="weekday">日</div>
+            <div class="weekday">月</div>
+            <div class="weekday">火</div>
+            <div class="weekday">水</div>
+            <div class="weekday">木</div>
+            <div class="weekday">金</div>
+            <div class="weekday">土</div>
+          </div>
 
-      window.firebase = { app, analytics, db, ref, set, onValue, push, get, remove };
-      console.log('Firebase v11 initialized successfully');
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
-    <script src="app.js"></script>
-  </body>
+          <div class="calendar-grid" id="calendar-grid"></div>
+        </div>
+      </section>
+
+      <!-- 給料タブ -->
+      <section class="tab-content" id="finance-tab">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">総労働時間</div>
+            <div class="stat-value" id="summary-hours">0</div>
+            <div class="stat-unit">時間</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">総収入</div>
+            <div class="stat-value" id="summary-income">¥0</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3 class="section-title">月別給料</h3>
+          <div class="chart-wrapper">
+            <canvas id="monthly-income-chart"></canvas>
+          </div>
+          <div class="income-list" id="monthly-income"></div>
+        </div>
+
+        <div class="section">
+          <h3 class="section-title">年別給料</h3>
+          <div class="chart-wrapper">
+            <canvas id="yearly-income-chart"></canvas>
+          </div>
+          <div class="income-list" id="yearly-income"></div>
+        </div>
+      </section>
+
+      <!-- 設定タブ -->
+      <section class="tab-content" id="settings-tab">
+        <div class="section">
+          <h3 class="section-title">職場の管理</h3>
+          <form class="form" id="job-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="job-name" class="form-label">職場名 <span class="required">*</span></label>
+                <input type="text" id="job-name" name="name" class="form-input" placeholder="例: ケンタッキー" required>
+              </div>
+              <div class="form-group">
+                <label for="job-rate" class="form-label">時給</label>
+                <input type="number" id="job-rate" name="rate" class="form-input" placeholder="0" step="1" min="0">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary">職場を追加</button>
+          </form>
+          <div class="list" id="job-list"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- シフト追加モーダル -->
+  <div class="modal" id="shift-modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">シフトを追加</h2>
+        <button class="modal-close" id="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <form class="form" id="calendar-shift-form">
+        <input type="hidden" id="modal-shift-date" name="date">
+        <input type="hidden" id="modal-shift-rate" name="rate">
+        <input type="hidden" id="modal-shift-notes" name="notes">
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="modal-shift-start" class="form-label">開始時間</label>
+            <div class="time-input-group">
+              <select id="modal-shift-start-hour" class="form-input time-hour" required>
+                <option value="">時</option>
+              </select>
+              <span class="time-separator">:</span>
+              <select id="modal-shift-start-minute" class="form-input time-minute" required>
+                <option value="">分</option>
+              </select>
+            </div>
+            <input type="hidden" id="modal-shift-start" name="start">
+          </div>
+          <div class="form-group">
+            <label for="modal-shift-end" class="form-label">終了時間</label>
+            <div class="time-input-group">
+              <select id="modal-shift-end-hour" class="form-input time-hour" required>
+                <option value="">時</option>
+              </select>
+              <span class="time-separator">:</span>
+              <select id="modal-shift-end-minute" class="form-input time-minute" required>
+                <option value="">分</option>
+              </select>
+            </div>
+            <input type="hidden" id="modal-shift-end" name="end">
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="modal-shift-role" class="form-label">職場 <span class="required">*</span></label>
+          <select id="modal-shift-role" name="role" class="form-input" required>
+            <option value="">選択してください</option>
+          </select>
+        </div>
+
+        <div class="suggestions" id="shift-suggestions" style="display: none;">
+          <div class="suggestions-label">過去のシフトから選択</div>
+          <div class="suggestions-list" id="suggestions-list"></div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary modal-cancel">キャンセル</button>
+          <button type="button" class="btn btn-danger modal-delete" id="modal-delete-btn" style="display: none;">削除</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-analytics.js";
+    import {
+      getDatabase,
+      ref,
+      set,
+      onValue,
+      push,
+      get,
+      remove
+    } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA2M27QaMYPaWK5A1-b2wwvICq5KNcTZt8",
+      authDomain: "planer-275c4.firebaseapp.com",
+      databaseURL: "https://planer-275c4-default-rtdb.firebaseio.com",
+      projectId: "planer-275c4",
+      storageBucket: "planer-275c4.firebasestorage.app",
+      messagingSenderId: "752551364905",
+      appId: "1:752551364905:web:07673595f83cea2c618f38",
+      measurementId: "G-12R593XP3D",
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const db = getDatabase(app);
+
+    window.firebase = { app, analytics, db, ref, set, onValue, push, get, remove };
+    console.log('Firebase initialized');
+  </script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
+  <script src="app.js"></script>
+</body>
 </html>
