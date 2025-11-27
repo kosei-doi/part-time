@@ -5,209 +5,279 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Part-Time Tracker</title>
     <link rel="stylesheet" href="styles.css" />
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/@event-calendar/core@2.8.0/index.global.min.css"
-    />
   </head>
   <body>
-    <header class="app-header">
-      <div>
-        <h1>Part-Time Tracker</h1>
-        <p>Log shifts, income, expenses, reminders, and calendar events.</p>
-      </div>
-      <div class="config-group">
-        <label for="firebase-config">Firebase Config (JSON)</label>
-        <textarea id="firebase-config" placeholder="{ \"apiKey\": \"...\", ... }"></textarea>
-        <button id="connect-firebase">Connect</button>
-        <p id="connection-status" class="status-chip">Not connected</p>
-      </div>
+    <header class="app-header compact">
+      <h1>Part-Time Tracker</h1>
     </header>
 
     <nav class="tabs" role="tablist">
-      <button class="tab-button active" data-tab="shifts" role="tab" aria-selected="true">Shifts</button>
-      <button class="tab-button" data-tab="templates" role="tab" aria-selected="false">Templates</button>
+      <button class="tab-button active" data-tab="calendar" role="tab" aria-selected="true">Calendar</button>
       <button class="tab-button" data-tab="finance" role="tab" aria-selected="false">Finance</button>
-      <button class="tab-button" data-tab="summary" role="tab" aria-selected="false">Summary</button>
-      <button class="tab-button" data-tab="calendar" role="tab" aria-selected="false">Calendar</button>
-      <button class="tab-button" data-tab="reminders" role="tab" aria-selected="false">Reminders</button>
+      <button class="tab-button" data-tab="settings" role="tab" aria-selected="false">Settings</button>
     </nav>
 
     <main>
-      <section class="panel tab-panel active" id="shift-panel" data-tab="shifts" role="tabpanel">
-        <h2>Shift Entry</h2>
-        <form id="shift-form">
-          <div class="grid two">
-            <label>
-              Date
-              <input type="date" name="date" required />
-            </label>
-            <label>
-              Start Time
-              <input type="time" name="start" required />
-            </label>
-            <label>
-              End Time
-              <input type="time" name="end" required />
-            </label>
-            <label>
-              Hourly Rate
-              <input type="number" step="0.01" name="rate" required />
-            </label>
-            <label>
-              Location / Role
-              <input type="text" name="role" placeholder="Front desk" />
-            </label>
-            <label>
-              Notes
-              <input type="text" name="notes" placeholder="Optional" />
-            </label>
-          </div>
-          <button type="submit">Save Shift</button>
-        </form>
-        <div id="shift-list" class="list"></div>
-      </section>
-
-      <section class="panel tab-panel" id="recurring-panel" data-tab="templates" role="tabpanel">
-        <h2>Recurring Templates</h2>
-        <form id="recurring-form">
-          <div class="grid two">
-            <label>
-              Weekday
-              <select name="weekday" required>
-                <option value="0">Sunday</option>
-                <option value="1">Monday</option>
-                <option value="2">Tuesday</option>
-                <option value="3">Wednesday</option>
-                <option value="4">Thursday</option>
-                <option value="5">Friday</option>
-                <option value="6">Saturday</option>
-              </select>
-            </label>
-            <label>
-              Start Time
-              <input type="time" name="start" required />
-            </label>
-            <label>
-              Duration (hrs)
-              <input type="number" step="0.25" name="duration" required />
-            </label>
-            <label>
-              Hourly Rate
-              <input type="number" step="0.01" name="rate" required />
-            </label>
-          </div>
-          <button type="submit">Save Template</button>
-        </form>
-        <div id="recurring-list" class="list"></div>
-      </section>
-
-      <section class="panel tab-panel" id="finance-panel" data-tab="finance" role="tabpanel">
-        <h2>Income & Expenses</h2>
-        <div class="grid two">
-          <form id="income-form">
-            <h3>Income</h3>
-            <label>
-              Date
-              <input type="date" name="date" required />
-            </label>
-            <label>
-              Amount
-              <input type="number" step="0.01" name="amount" required />
-            </label>
-            <label>
-              Category
-              <input type="text" name="category" placeholder="Salary" />
-            </label>
-            <button type="submit">Add Income</button>
-          </form>
-          <form id="expense-form">
-            <h3>Expense</h3>
-            <label>
-              Date
-              <input type="date" name="date" required />
-            </label>
-            <label>
-              Amount
-              <input type="number" step="0.01" name="amount" required />
-            </label>
-            <label>
-              Category
-              <input type="text" name="category" placeholder="Transport" />
-            </label>
-            <button type="submit">Add Expense</button>
-          </form>
-        </div>
-        <div class="list" id="finance-list"></div>
-      </section>
-
-      <section class="panel tab-panel" id="summary-panel" data-tab="summary" role="tabpanel">
-        <h2>Summary</h2>
-        <div class="grid three" id="summary-cards">
-          <article class="card">
-            <p>Total Hours</p>
-            <strong id="summary-hours">0</strong>
-          </article>
-          <article class="card">
-            <p>Income</p>
-            <strong id="summary-income">$0</strong>
-          </article>
-          <article class="card">
-            <p>Expenses</p>
-            <strong id="summary-expenses">$0</strong>
-          </article>
-        </div>
-        <div id="summary-details" class="summary-details"></div>
-        <div class="charts">
-          <canvas id="income-expense-chart" height="140"></canvas>
-          <canvas id="hours-chart" height="140"></canvas>
-        </div>
-      </section>
-
-      <section class="panel tab-panel" id="calendar-panel" data-tab="calendar" role="tabpanel">
+      <!-- Calendar Tab (Main) -->
+      <section class="panel tab-panel active" id="calendar-panel" data-tab="calendar" role="tabpanel">
         <div class="calendar-header">
           <h2>Calendar</h2>
-          <div>
+          <div class="calendar-nav">
             <button id="calendar-prev" aria-label="Previous month">◀</button>
             <span id="calendar-month"></span>
             <button id="calendar-next" aria-label="Next month">▶</button>
           </div>
         </div>
+        <div class="calendar-weekdays">
+          <div class="weekday-header">Sun</div>
+          <div class="weekday-header">Mon</div>
+          <div class="weekday-header">Tue</div>
+          <div class="weekday-header">Wed</div>
+          <div class="weekday-header">Thu</div>
+          <div class="weekday-header">Fri</div>
+          <div class="weekday-header">Sat</div>
+        </div>
         <div id="calendar-grid" class="calendar-grid"></div>
       </section>
 
-      <section class="panel tab-panel" id="reminder-panel" data-tab="reminders" role="tabpanel">
-        <div class="panel-heading">
-          <h2>Reminders</h2>
-          <button type="button" id="enable-notifications">Enable Alerts</button>
-        </div>
-        <form id="reminder-form">
-          <div class="grid two">
-            <label>
-              Date
-              <input type="date" name="date" required />
-            </label>
-            <label>
-              Time
-              <input type="time" name="time" value="09:00" required />
-            </label>
-            <label>
-              Message
-              <input type="text" name="message" placeholder="Follow up with manager" required />
-            </label>
-            <label>
-              Notify (mins before)
-              <input type="number" name="lead" value="30" />
-            </label>
+      <!-- Finance Tab -->
+      <section class="panel tab-panel" id="finance-panel" data-tab="finance" role="tabpanel">
+        <div class="summary-section">
+          <div class="grid three" id="summary-cards">
+            <article class="card">
+              <p>Total Hours</p>
+              <strong id="summary-hours">0</strong>
+            </article>
+            <article class="card">
+              <p>Income</p>
+              <strong id="summary-income">$0</strong>
+            </article>
+            <article class="card">
+              <p>Expenses</p>
+              <strong id="summary-expenses">$0</strong>
+            </article>
           </div>
-          <button type="submit">Add Reminder</button>
+          <div id="summary-details" class="summary-details"></div>
+        </div>
+
+        <h2>Add Entry</h2>
+        <form id="income-form" class="finance-form" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+          <h3>Income</h3>
+          <label>
+            Date
+            <input type="date" name="date" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+          </label>
+          <label>
+            Amount
+            <input type="number" step="0.01" name="amount" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+          </label>
+          <label>
+            Category
+            <input type="text" name="category" placeholder="Salary" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
+          </label>
+          <button type="submit">Add Income</button>
         </form>
-        <div id="reminder-list" class="list"></div>
+
+        <form id="expense-form" class="finance-form" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+          <h3>Expense</h3>
+          <label>
+            Date
+            <input type="date" name="date" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+          </label>
+          <label>
+            Amount
+            <input type="number" step="0.01" name="amount" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+          </label>
+          <label>
+            Category
+            <input type="text" name="category" placeholder="Transport" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
+          </label>
+          <button type="submit">Add Expense</button>
+        </form>
+
+        <div class="list" id="finance-list"></div>
+      </section>
+
+      <!-- Settings Tab -->
+      <section class="panel tab-panel" id="settings-panel" data-tab="settings" role="tabpanel">
+        <h2>Settings</h2>
+        
+        <div class="settings-section">
+          <h3>Work Details</h3>
+          <form id="work-settings-form" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+            <label>
+              Work Location
+              <input type="text" name="workLocation" id="work-location" placeholder="Company name or location" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
+            </label>
+            <label>
+              Default Hourly Wage
+              <input type="number" step="0.01" name="defaultWage" id="default-wage" placeholder="0.00" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
+            </label>
+            <label>
+              Default Start Time
+              <input type="time" name="defaultStartTime" id="default-start-time" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
+            </label>
+            <label>
+              Default End Time
+              <input type="time" name="defaultEndTime" id="default-end-time" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
+            </label>
+            <label>
+              Tax Rate (%)
+              <input type="number" step="0.01" name="taxRate" id="tax-rate" placeholder="0.00" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
+            </label>
+            <button type="submit">Save Settings</button>
+          </form>
+        </div>
+
+        <div class="settings-section">
+          <h3>Shifts</h3>
+          <div id="shift-list" class="list"></div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Recurring Templates</h3>
+          <form id="recurring-form" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+            <div class="grid two">
+              <label>
+                Weekday
+                <select name="weekday" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" required>
+                  <option value="0">Sunday</option>
+                  <option value="1">Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                  <option value="6">Saturday</option>
+                </select>
+              </label>
+              <label>
+                Start Time
+                <input type="time" name="start" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+              </label>
+              <label>
+                Duration (hrs)
+                <input type="number" step="0.25" name="duration" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+              </label>
+              <label>
+                Hourly Rate
+                <input type="number" step="0.01" name="rate" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+              </label>
+            </div>
+            <button type="submit">Save Template</button>
+          </form>
+          <div id="recurring-list" class="list"></div>
+        </div>
+
+        <div class="settings-section">
+          <div class="panel-heading">
+            <h3>Reminders</h3>
+            <button type="button" id="enable-notifications">Enable Alerts</button>
+          </div>
+          <form id="reminder-form" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+            <div class="grid two">
+              <label>
+                Date
+                <input type="date" name="date" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+              </label>
+              <label>
+                Time
+                <input type="time" name="time" value="09:00" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+              </label>
+              <label>
+                Message
+                <input type="text" name="message" placeholder="Follow up with manager" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+              </label>
+              <label>
+                Notify (mins before)
+                <input type="number" name="lead" value="30" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
+              </label>
+            </div>
+            <button type="submit">Add Reminder</button>
+          </form>
+          <div id="reminder-list" class="list"></div>
+        </div>
       </section>
     </main>
 
-    <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-database-compat.js"></script>
+    <!-- Shift Entry Modal -->
+    <div id="shift-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Add Shift</h2>
+          <button class="modal-close" aria-label="Close">&times;</button>
+        </div>
+        <form id="calendar-shift-form" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+          <div class="grid two">
+            <label>
+              Date
+              <input type="date" name="date" id="modal-shift-date" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+            </label>
+            <label>
+              Start Time
+              <input type="time" name="start" id="modal-shift-start" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+              <small class="suggestion-hint" id="start-suggestion"></small>
+            </label>
+            <label>
+              End Time
+              <input type="time" name="end" id="modal-shift-end" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+              <small class="suggestion-hint" id="end-suggestion"></small>
+            </label>
+            <label>
+              Hourly Rate
+              <input type="number" step="0.01" name="rate" id="modal-shift-rate" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+              <small class="suggestion-hint" id="rate-suggestion"></small>
+            </label>
+            <label>
+              Location / Role <span style="color: var(--danger);">*</span>
+              <input type="text" name="role" id="modal-shift-role" placeholder="Front desk" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" required />
+              <small class="suggestion-hint" id="role-suggestion"></small>
+            </label>
+            <label>
+              Notes
+              <input type="text" name="notes" id="modal-shift-notes" placeholder="Optional" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" spellcheck="false" />
+            </label>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="modal-cancel">Cancel</button>
+            <button type="button" class="modal-delete danger" id="modal-delete-btn" style="display: none;">Delete</button>
+            <button type="submit">Save Shift</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Firebase SDK (v11 - combiと同じパターン) -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+      import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-analytics.js";
+      import {
+        getDatabase,
+        ref,
+        set,
+        onValue,
+        push,
+        get,
+        remove
+      } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyA2M27QaMYPaWK5A1-b2wwvICq5KNcTZt8",
+        authDomain: "planer-275c4.firebaseapp.com",
+        databaseURL: "https://planer-275c4-default-rtdb.firebaseio.com",
+        projectId: "planer-275c4",
+        storageBucket: "planer-275c4.firebasestorage.app",
+        messagingSenderId: "752551364905",
+        appId: "1:752551364905:web:07673595f83cea2c618f38",
+        measurementId: "G-12R593XP3D",
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const analytics = getAnalytics(app);
+      const db = getDatabase(app);
+
+      window.firebase = { app, analytics, db, ref, set, onValue, push, get, remove };
+      console.log('Firebase v11 initialized successfully');
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
     <script src="app.js"></script>
