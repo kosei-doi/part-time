@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Part-Time Tracker</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@event-calendar/core@2.8.0/index.global.min.css"
+    />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>Part-Time Tracker</h1>
+        <p>Log shifts, income, expenses, reminders, and calendar events.</p>
+      </div>
+      <div class="config-group">
+        <label for="firebase-config">Firebase Config (JSON)</label>
+        <textarea id="firebase-config" placeholder="{ \"apiKey\": \"...\", ... }"></textarea>
+        <button id="connect-firebase">Connect</button>
+        <p id="connection-status" class="status-chip">Not connected</p>
+      </div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab-button active" data-tab="shifts" role="tab" aria-selected="true">Shifts</button>
+      <button class="tab-button" data-tab="templates" role="tab" aria-selected="false">Templates</button>
+      <button class="tab-button" data-tab="finance" role="tab" aria-selected="false">Finance</button>
+      <button class="tab-button" data-tab="summary" role="tab" aria-selected="false">Summary</button>
+      <button class="tab-button" data-tab="calendar" role="tab" aria-selected="false">Calendar</button>
+      <button class="tab-button" data-tab="reminders" role="tab" aria-selected="false">Reminders</button>
+    </nav>
+
+    <main>
+      <section class="panel tab-panel active" id="shift-panel" data-tab="shifts" role="tabpanel">
+        <h2>Shift Entry</h2>
+        <form id="shift-form">
+          <div class="grid two">
+            <label>
+              Date
+              <input type="date" name="date" required />
+            </label>
+            <label>
+              Start Time
+              <input type="time" name="start" required />
+            </label>
+            <label>
+              End Time
+              <input type="time" name="end" required />
+            </label>
+            <label>
+              Hourly Rate
+              <input type="number" step="0.01" name="rate" required />
+            </label>
+            <label>
+              Location / Role
+              <input type="text" name="role" placeholder="Front desk" />
+            </label>
+            <label>
+              Notes
+              <input type="text" name="notes" placeholder="Optional" />
+            </label>
+          </div>
+          <button type="submit">Save Shift</button>
+        </form>
+        <div id="shift-list" class="list"></div>
+      </section>
+
+      <section class="panel tab-panel" id="recurring-panel" data-tab="templates" role="tabpanel">
+        <h2>Recurring Templates</h2>
+        <form id="recurring-form">
+          <div class="grid two">
+            <label>
+              Weekday
+              <select name="weekday" required>
+                <option value="0">Sunday</option>
+                <option value="1">Monday</option>
+                <option value="2">Tuesday</option>
+                <option value="3">Wednesday</option>
+                <option value="4">Thursday</option>
+                <option value="5">Friday</option>
+                <option value="6">Saturday</option>
+              </select>
+            </label>
+            <label>
+              Start Time
+              <input type="time" name="start" required />
+            </label>
+            <label>
+              Duration (hrs)
+              <input type="number" step="0.25" name="duration" required />
+            </label>
+            <label>
+              Hourly Rate
+              <input type="number" step="0.01" name="rate" required />
+            </label>
+          </div>
+          <button type="submit">Save Template</button>
+        </form>
+        <div id="recurring-list" class="list"></div>
+      </section>
+
+      <section class="panel tab-panel" id="finance-panel" data-tab="finance" role="tabpanel">
+        <h2>Income & Expenses</h2>
+        <div class="grid two">
+          <form id="income-form">
+            <h3>Income</h3>
+            <label>
+              Date
+              <input type="date" name="date" required />
+            </label>
+            <label>
+              Amount
+              <input type="number" step="0.01" name="amount" required />
+            </label>
+            <label>
+              Category
+              <input type="text" name="category" placeholder="Salary" />
+            </label>
+            <button type="submit">Add Income</button>
+          </form>
+          <form id="expense-form">
+            <h3>Expense</h3>
+            <label>
+              Date
+              <input type="date" name="date" required />
+            </label>
+            <label>
+              Amount
+              <input type="number" step="0.01" name="amount" required />
+            </label>
+            <label>
+              Category
+              <input type="text" name="category" placeholder="Transport" />
+            </label>
+            <button type="submit">Add Expense</button>
+          </form>
+        </div>
+        <div class="list" id="finance-list"></div>
+      </section>
+
+      <section class="panel tab-panel" id="summary-panel" data-tab="summary" role="tabpanel">
+        <h2>Summary</h2>
+        <div class="grid three" id="summary-cards">
+          <article class="card">
+            <p>Total Hours</p>
+            <strong id="summary-hours">0</strong>
+          </article>
+          <article class="card">
+            <p>Income</p>
+            <strong id="summary-income">$0</strong>
+          </article>
+          <article class="card">
+            <p>Expenses</p>
+            <strong id="summary-expenses">$0</strong>
+          </article>
+        </div>
+        <div id="summary-details" class="summary-details"></div>
+        <div class="charts">
+          <canvas id="income-expense-chart" height="140"></canvas>
+          <canvas id="hours-chart" height="140"></canvas>
+        </div>
+      </section>
+
+      <section class="panel tab-panel" id="calendar-panel" data-tab="calendar" role="tabpanel">
+        <div class="calendar-header">
+          <h2>Calendar</h2>
+          <div>
+            <button id="calendar-prev" aria-label="Previous month">◀</button>
+            <span id="calendar-month"></span>
+            <button id="calendar-next" aria-label="Next month">▶</button>
+          </div>
+        </div>
+        <div id="calendar-grid" class="calendar-grid"></div>
+      </section>
+
+      <section class="panel tab-panel" id="reminder-panel" data-tab="reminders" role="tabpanel">
+        <div class="panel-heading">
+          <h2>Reminders</h2>
+          <button type="button" id="enable-notifications">Enable Alerts</button>
+        </div>
+        <form id="reminder-form">
+          <div class="grid two">
+            <label>
+              Date
+              <input type="date" name="date" required />
+            </label>
+            <label>
+              Time
+              <input type="time" name="time" value="09:00" required />
+            </label>
+            <label>
+              Message
+              <input type="text" name="message" placeholder="Follow up with manager" required />
+            </label>
+            <label>
+              Notify (mins before)
+              <input type="number" name="lead" value="30" />
+            </label>
+          </div>
+          <button type="submit">Add Reminder</button>
+        </form>
+        <div id="reminder-list" class="list"></div>
+      </section>
+    </main>
+
+    <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
