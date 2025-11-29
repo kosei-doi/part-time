@@ -201,3 +201,4 @@ All data includes timestamps (`createdAt`, `updatedAt`) for tracking.
 - Make sure you're using a modern browser (Chrome, Firefox, Safari, Edge)
 - The app requires JavaScript to be enabled
 
+

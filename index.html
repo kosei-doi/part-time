@@ -1,212 +1,245 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="パートタイム勤務のシフトと給料を管理するアプリ">
-  <title>パートタイムトラッカー</title>
-  <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>パートタイムトラッカー</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 28 28' fill='none'%3E%3Cdefs%3E%3ClinearGradient id='faviconGradient' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%233b82f6;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%232563eb;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='4' y='6' width='16' height='16' rx='2' fill='none' stroke='url(%23faviconGradient)' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M4 6 L4 8 Q4 6 6 6 L10 6' fill='none' stroke='url(%23faviconGradient)' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M4 8 L4 10 Q4 8 6 8 L10 8' fill='none' stroke='url(%23faviconGradient)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' opacity='0.6'/%3E%3Cline x1='4' y1='11' x2='20' y2='11' stroke='url(%23faviconGradient)' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='20' cy='7' r='3.5' fill='none' stroke='url(%23faviconGradient)' stroke-width='2'/%3E%3Cline x1='20' y1='7' x2='20' y2='4.5' stroke='url(%23faviconGradient)' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='20' y1='7' x2='22.2' y2='7' stroke='url(%23faviconGradient)' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 28 28' fill='none'%3E%3Cdefs%3E%3ClinearGradient id='appIconGradient' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%233b82f6;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%232563eb;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='4' y='6' width='16' height='16' rx='2' fill='none' stroke='url(%23appIconGradient)' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M4 6 L4 8 Q4 6 6 6 L10 6' fill='none' stroke='url(%23appIconGradient)' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M4 8 L4 10 Q4 8 6 8 L10 8' fill='none' stroke='url(%23appIconGradient)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' opacity='0.6'/%3E%3Cline x1='4' y1='11' x2='20' y2='11' stroke='url(%23appIconGradient)' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='20' cy='7' r='3.5' fill='none' stroke='url(%23appIconGradient)' stroke-width='2'/%3E%3Cline x1='20' y1='7' x2='20' y2='4.5' stroke='url(%23appIconGradient)' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='20' y1='7' x2='22.2' y2='7' stroke='url(%23appIconGradient)' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
 </head>
 <body>
-  <!-- ヘッダー -->
-  <header class="header">
-    <div class="container">
-      <h1 class="header-title">パートタイムトラッカー</h1>
-    </div>
-  </header>
+    <!-- Firebase SDK (v11) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-analytics.js";
+        import {
+            getDatabase,
+            ref,
+            set,
+            onValue,
+            onChildAdded,
+            onChildChanged,
+            onChildRemoved,
+            push,
+            update,
+            remove,
+            get
+        } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
 
-  <!-- タブナビゲーション -->
-  <nav class="tabs">
-    <div class="container">
-      <button class="tab-btn active" data-tab="calendar">カレンダー</button>
-      <button class="tab-btn" data-tab="finance">給料</button>
-      <button class="tab-btn" data-tab="settings">設定</button>
-    </div>
-  </nav>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBHOQ78Jot6IrkA_SLgXMMwq-jDli-tsXk",
+            authDomain: "part-time-8d812.firebaseapp.com",
+            databaseURL: "https://part-time-8d812-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "part-time-8d812",
+            storageBucket: "part-time-8d812.firebasestorage.app",
+            messagingSenderId: "259833518342",
+            appId: "1:259833518342:web:c32375a3ee0755b70d2687",
+            measurementId: "G-NZVPDN0LG9"
+        };
 
-  <!-- メインコンテンツ -->
-  <main class="main">
-    <div class="container">
-      
-      <!-- カレンダータブ -->
-      <section class="tab-content active" id="calendar-tab">
-        <div class="calendar-wrapper">
-          <div class="calendar-header">
-            <h2 class="calendar-title">カレンダー</h2>
-            <div class="calendar-controls">
-              <button class="btn-icon" id="calendar-prev" aria-label="前の月">‹</button>
-              <span class="calendar-month" id="calendar-month"></span>
-              <button class="btn-icon" id="calendar-next" aria-label="次の月">›</button>
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const db = getDatabase(app);
+
+        window.firebase = { app, analytics, db, ref, set, onValue, onChildAdded, onChildChanged, onChildRemoved, push, update, remove, get };
+        console.log('Firebase v11 initialized successfully');
+    </script>
+
+    <div class="app">
+        <!-- ヘッダー -->
+        <header class="header">
+            <div class="header-controls">
+                <div class="date-navigation">
+                    <button id="prevMonth" class="nav-btn" aria-label="前の月">←</button>
+                    <span id="currentDate" class="current-date"></span>
+                    <button id="nextMonth" class="nav-btn" aria-label="次の月">→</button>
+                    <button id="todayBtn" class="today-btn">今日</button>
+                </div>
+                <div class="view-toggle">
+                    <button id="monthViewBtn" class="view-btn active">月次</button>
+                </div>
             </div>
-          </div>
+        </header>
+        <div id="notificationArea" class="notification" role="status" aria-live="polite"></div>
 
-          <div class="calendar-weekdays">
-            <div class="weekday">日</div>
-            <div class="weekday">月</div>
-            <div class="weekday">火</div>
-            <div class="weekday">水</div>
-            <div class="weekday">木</div>
-            <div class="weekday">金</div>
-            <div class="weekday">土</div>
-          </div>
+        <!-- タブナビゲーション -->
+        <nav class="tabs-nav">
+            <button id="calendarTab" class="tab-btn active" data-tab="calendar">カレンダー</button>
+            <button id="incomeTab" class="tab-btn" data-tab="income">収入</button>
+            <button id="settingsTab" class="tab-btn" data-tab="settings">設定</button>
+        </nav>
 
-          <div class="calendar-grid" id="calendar-grid"></div>
-        </div>
-      </section>
-
-      <!-- 給料タブ -->
-      <section class="tab-content" id="finance-tab">
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-label">総労働時間</div>
-            <div class="stat-value" id="summary-hours">0</div>
-            <div class="stat-unit">時間</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">総収入</div>
-            <div class="stat-value" id="summary-income">¥0</div>
-          </div>
-        </div>
-
-        <div class="section">
-          <h3 class="section-title">月別給料</h3>
-          <div class="chart-wrapper">
-            <canvas id="monthly-income-chart"></canvas>
-          </div>
-          <div class="income-list" id="monthly-income"></div>
-        </div>
-
-        <div class="section">
-          <h3 class="section-title">年別給料</h3>
-          <div class="chart-wrapper">
-            <canvas id="yearly-income-chart"></canvas>
-          </div>
-          <div class="income-list" id="yearly-income"></div>
-        </div>
-      </section>
-
-      <!-- 設定タブ -->
-      <section class="tab-content" id="settings-tab">
-        <div class="section">
-          <h3 class="section-title">職場の管理</h3>
-          <form class="form" id="job-form">
-            <div class="form-row">
-              <div class="form-group">
-                <label for="job-name" class="form-label">職場名 <span class="required">*</span></label>
-                <input type="text" id="job-name" name="name" class="form-input" placeholder="例: ケンタッキー" required>
-              </div>
-              <div class="form-group">
-                <label for="job-rate" class="form-label">時給</label>
-                <input type="number" id="job-rate" name="rate" class="form-input" placeholder="0" step="1" min="0">
-              </div>
+        <!-- メインコンテンツ -->
+        <main class="main-content">
+            <!-- カレンダータブ -->
+            <div id="calendarTabContent" class="tab-content active">
+                <!-- 月次ビュー -->
+                <div id="monthView" class="view-container active">
+                    <div class="month-calendar">
+                        <div class="month-weekdays">
+                            <div class="weekday">日</div>
+                            <div class="weekday">月</div>
+                            <div class="weekday">火</div>
+                            <div class="weekday">水</div>
+                            <div class="weekday">木</div>
+                            <div class="weekday">金</div>
+                            <div class="weekday">土</div>
+                        </div>
+                        <div id="monthGrid" class="month-grid">
+                            <!-- 月次カレンダーの日付がここに動的に生成される -->
+                        </div>
+                    </div>
+                </div>
             </div>
-            <button type="submit" class="btn btn-primary">職場を追加</button>
-          </form>
-          <div class="list" id="job-list"></div>
-        </div>
-      </section>
 
+            <!-- 収入タブ -->
+            <div id="incomeTabContent" class="tab-content">
+                <div class="income-content">
+                    <div class="income-summary">
+                        <div class="income-header">
+                            <div class="income-header-main">
+                                <h2>収入サマリー</h2>
+                                <div class="income-view-tabs">
+                                    <button id="incomeMonthViewBtn" class="income-view-tab active">月</button>
+                                    <button id="incomeYearViewBtn" class="income-view-tab">年</button>
+                                </div>
+                            </div>
+                            <div class="income-nav" id="incomeMonthNav">
+                                <button id="incomeMonthPrev" class="nav-btn" aria-label="前の月">←</button>
+                                <span id="incomeCurrentMonthLabel" class="income-period-label"></span>
+                                <button id="incomeMonthNext" class="nav-btn" aria-label="次の月">→</button>
+                            </div>
+                            <div class="income-nav" id="incomeYearNav" style="display: none;">
+                                <button id="incomeYearPrev" class="nav-btn" aria-label="前の年">←</button>
+                                <span id="incomeCurrentYearLabel" class="income-period-label"></span>
+                                <button id="incomeYearNext" class="nav-btn" aria-label="次の年">→</button>
+                            </div>
+                        </div>
+                        <div id="incomeMonthView" class="income-view active">
+                            <div id="incomeMonthStats" class="income-stats">
+                                <!-- 月別の勤務時間と給料見込みがここに表示される -->
+                            </div>
+                        </div>
+                        <div id="incomeYearView" class="income-view">
+                            <div id="incomeYearChart" class="income-year-chart">
+                                <!-- 年間グラフがここに表示される -->
+                            </div>
+                        </div>
+                        <!-- 旧実装との互換用ダミー要素（将来的にapp.js側を完全移行したら削除予定） -->
+                        <div id="incomeStats" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 設定タブ -->
+            <div id="settingsTabContent" class="tab-content">
+                <div class="settings-content">
+                    <h2>職場設定</h2>
+                    <div id="workplacesList" class="workplaces-list">
+                        <!-- 職場一覧がここに表示される -->
+                    </div>
+                    <button id="addWorkplaceBtn" class="btn btn-primary">職場を追加</button>
+                </div>
+            </div>
+        </main>
+
+        <!-- シフト追加/編集フォーム（モーダル） -->
+        <div id="shiftModal" class="modal" role="dialog" aria-hidden="true">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modalTitle">シフトを追加</h2>
+                    <button id="closeModal" class="close-btn" aria-label="閉じる">&times;</button>
+                </div>
+                <form id="shiftForm" class="event-form">
+                    <div class="form-section main-section">
+                        <!-- 日付はカレンダーから自動設定するため、入力欄は非表示 -->
+                        <input type="hidden" id="shiftDate" name="date">
+                        <div class="form-row compact-row">
+                            <div class="form-group compact">
+                                <label for="shiftStart">開始時間 *</label>
+                                <input type="time" id="shiftStart" name="start" required aria-required="true">
+                            </div>
+                            <div class="form-group compact">
+                                <label for="shiftEnd">終了時間 *</label>
+                                <input type="time" id="shiftEnd" name="end" required aria-required="true">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="shiftWorkplace">職場 *</label>
+                            <select id="shiftWorkplace" name="workplace" required aria-required="true">
+                                <option value="">選択してください</option>
+                            </select>
+                        </div>
+                        <!-- 時給入力は職場設定に任せるため非表示 -->
+                        <input type="hidden" id="shiftRate" name="rate">
+                        <div class="form-group" id="timeSuggestionsContainer" style="display: none;">
+                            <label>過去の時間候補</label>
+                            <div id="timeSuggestions" class="time-suggestions">
+                                <!-- 過去の時間候補がここに表示される -->
+                            </div>
+                        </div>
+                        <!-- メモ欄はシンプルにするため削除 -->
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">保存</button>
+                        <button type="button" id="deleteBtn" class="btn btn-danger" style="display: none;">削除</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 職場追加/編集モーダル -->
+        <div id="workplaceModal" class="modal" role="dialog" aria-hidden="true">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="workplaceModalTitle">職場を追加</h2>
+                    <button id="closeWorkplaceModal" class="close-btn" aria-label="閉じる">&times;</button>
+                </div>
+                <form id="workplaceForm" class="event-form" method="post" onsubmit="return false;">
+                    <div class="form-section main-section">
+                        <div class="form-group">
+                            <label for="workplaceName">職場名 *</label>
+                            <input type="text" id="workplaceName" name="name" required aria-required="true" maxlength="100">
+                        </div>
+                        <div class="form-group">
+                            <label for="workplaceRate">時給（円） *</label>
+                            <input type="number" id="workplaceRate" name="rate" step="1" min="0" required aria-required="true" placeholder="1000">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">保存</button>
+                        <button type="button" id="deleteWorkplaceBtn" class="btn btn-danger" style="display: none;">削除</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 確認モーダル -->
+        <div id="confirmModal" class="modal" role="dialog" aria-hidden="true">
+            <div class="modal-content confirm-modal-content">
+                <div class="modal-header">
+                    <h2 id="confirmTitle">確認</h2>
+                </div>
+                <div class="confirm-body">
+                    <p id="confirmMessage"></p>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="confirmCancelBtn" class="btn btn-secondary">キャンセル</button>
+                    <button type="button" id="confirmOkBtn" class="btn btn-primary">OK</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ローディングオーバーレイ -->
+        <div id="loadingOverlay" class="loading-overlay hidden">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">処理中...</p>
+        </div>
     </div>
-  </main>
 
-  <!-- シフト追加モーダル -->
-  <div class="modal" id="shift-modal">
-    <div class="modal-overlay"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 class="modal-title">シフトを追加</h2>
-        <button class="modal-close" id="modal-close" aria-label="閉じる">×</button>
-      </div>
-      <form class="form" id="calendar-shift-form">
-        <input type="hidden" id="modal-shift-date" name="date">
-        <input type="hidden" id="modal-shift-rate" name="rate">
-        <input type="hidden" id="modal-shift-notes" name="notes">
-        
-        <div class="form-row">
-          <div class="form-group">
-            <label for="modal-shift-start" class="form-label">開始時間</label>
-            <div class="time-input-group">
-              <select id="modal-shift-start-hour" class="form-input time-hour" required>
-                <option value="">時</option>
-              </select>
-              <span class="time-separator">:</span>
-              <select id="modal-shift-start-minute" class="form-input time-minute" required>
-                <option value="">分</option>
-              </select>
-            </div>
-            <input type="hidden" id="modal-shift-start" name="start">
-          </div>
-          <div class="form-group">
-            <label for="modal-shift-end" class="form-label">終了時間</label>
-            <div class="time-input-group">
-              <select id="modal-shift-end-hour" class="form-input time-hour" required>
-                <option value="">時</option>
-              </select>
-              <span class="time-separator">:</span>
-              <select id="modal-shift-end-minute" class="form-input time-minute" required>
-                <option value="">分</option>
-              </select>
-            </div>
-            <input type="hidden" id="modal-shift-end" name="end">
-          </div>
-        </div>
-        
-        <div class="form-group">
-          <label for="modal-shift-role" class="form-label">職場 <span class="required">*</span></label>
-          <select id="modal-shift-role" name="role" class="form-input" required>
-            <option value="">選択してください</option>
-          </select>
-        </div>
-
-        <div class="suggestions" id="shift-suggestions" style="display: none;">
-          <div class="suggestions-label">過去のシフトから選択</div>
-          <div class="suggestions-list" id="suggestions-list"></div>
-        </div>
-
-        <div class="modal-actions">
-          <button type="button" class="btn btn-secondary modal-cancel">キャンセル</button>
-          <button type="button" class="btn btn-danger modal-delete" id="modal-delete-btn" style="display: none;">削除</button>
-          <button type="submit" class="btn btn-primary">保存</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Firebase SDK -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-analytics.js";
-    import {
-      getDatabase,
-      ref,
-      set,
-      onValue,
-      push,
-      get,
-      remove
-    } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyA2M27QaMYPaWK5A1-b2wwvICq5KNcTZt8",
-      authDomain: "planer-275c4.firebaseapp.com",
-      databaseURL: "https://planer-275c4-default-rtdb.firebaseio.com",
-      projectId: "planer-275c4",
-      storageBucket: "planer-275c4.firebasestorage.app",
-      messagingSenderId: "752551364905",
-      appId: "1:752551364905:web:07673595f83cea2c618f38",
-      measurementId: "G-12R593XP3D",
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const analytics = getAnalytics(app);
-    const db = getDatabase(app);
-
-    window.firebase = { app, analytics, db, ref, set, onValue, push, get, remove };
-    console.log('Firebase initialized');
-  </script>
-  
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
-  <script src="app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
