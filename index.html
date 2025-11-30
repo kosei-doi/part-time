@@ -48,20 +48,6 @@
     </script>
 
     <div class="app">
-        <!-- ヘッダー -->
-        <header class="header">
-            <div class="header-controls">
-                <div class="date-navigation">
-                    <button id="prevMonth" class="nav-btn" aria-label="前の月">←</button>
-                    <span id="currentDate" class="current-date"></span>
-                    <button id="nextMonth" class="nav-btn" aria-label="次の月">→</button>
-                    <button id="todayBtn" class="today-btn">今日</button>
-                </div>
-                <div class="view-toggle">
-                    <button id="monthViewBtn" class="view-btn active">月次</button>
-                </div>
-            </div>
-        </header>
         <div id="notificationArea" class="notification" role="status" aria-live="polite"></div>
 
         <!-- タブナビゲーション -->
@@ -77,6 +63,20 @@
             <div id="calendarTabContent" class="tab-content active">
                 <!-- 月次ビュー -->
                 <div id="monthView" class="view-container active">
+                    <!-- 月移動ナビゲーション -->
+                    <div class="month-navigation">
+                        <button id="prevMonth" class="month-nav-btn" aria-label="前の月">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M15 18l-6-6 6-6"/>
+                            </svg>
+                        </button>
+                        <div id="currentDate" class="month-current-date"></div>
+                        <button id="nextMonth" class="month-nav-btn" aria-label="次の月">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 18l6-6-6-6"/>
+                            </svg>
+                        </button>
+                    </div>
                     <div class="month-calendar">
                         <div class="month-weekdays">
                             <div class="weekday">日</div>
@@ -118,11 +118,17 @@
                             </div>
                         </div>
                         <div id="incomeMonthView" class="income-view active">
+                            <div id="incomeMonthProgress" class="income-month-progress">
+                                <!-- 円形プログレスバーがここに表示される -->
+                            </div>
                             <div id="incomeMonthStats" class="income-stats">
                                 <!-- 月別の勤務時間と給料見込みがここに表示される -->
                             </div>
                         </div>
                         <div id="incomeYearView" class="income-view">
+                            <div id="incomeYearStats" class="income-year-stats">
+                                <!-- 年間統計情報がここに表示される -->
+                            </div>
                             <div id="incomeYearChart" class="income-year-chart">
                                 <!-- 年間グラフがここに表示される -->
                             </div>
@@ -174,13 +180,17 @@
                         </div>
                         <!-- 時給入力は職場設定に任せるため非表示 -->
                         <input type="hidden" id="shiftRate" name="rate">
-                        <div class="form-group" id="timeSuggestionsContainer" style="display: none;">
-                            <label>過去の時間候補</label>
-                            <div id="timeSuggestions" class="time-suggestions">
-                                <!-- 過去の時間候補がここに表示される -->
+                        <!-- メモ欄はシンプルにするため削除 -->
+                    </div>
+                    
+                    <!-- 入力履歴セクション -->
+                    <div class="form-section history-section">
+                        <div class="form-group">
+                            <label>入力履歴</label>
+                            <div id="timeHistoryContainer" class="time-history-container">
+                                <!-- 入力履歴がここに表示される -->
                             </div>
                         </div>
-                        <!-- メモ欄はシンプルにするため削除 -->
                     </div>
                     
                     <div class="form-actions">

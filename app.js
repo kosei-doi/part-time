@@ -264,31 +264,20 @@ async function firebaseSetWithTimeout(ref, value, timeoutMs = 10000) {
 
 // 特定のイベントが影響するビューだけを更新（月次ビューのみ）
 function updateViewsForEvent(event) {
-  if (!event || !event.id) return;
-  
-  const allowedRanges = getAllowedDateRanges();
-  if (!isEventInAllowedRange(event, allowedRanges)) {
-    // 範囲外のイベントは削除のみ処理
-    renderMonthView();
-    scheduleAllNotifications();
-    return;
-  }
-  
-  // イベントが表示される日付を計算
-  const eventDate = event.startTime ? new Date(event.startTime.split('T')[0]) : null;
-  if (!eventDate || Number.isNaN(eventDate.getTime())) {
+  if (!event || !event.id) {
+    // イベント情報がない場合も更新（削除後の場合など）
     updateViews();
     return;
   }
   
-  // 月次ビュー: 該当月だけ更新
-  const currentMonth = currentDate.getMonth();
-  const currentYear = currentDate.getFullYear();
-  if (eventDate.getMonth() === currentMonth && eventDate.getFullYear() === currentYear) {
-    renderMonthView();
-  }
-  
+  // 常に月次ビューを更新（イベントが表示範囲外でも、他の月でも更新する）
+  renderMonthView();
   scheduleAllNotifications();
+  
+  // 収入タブが表示中の場合は更新
+  if (currentTab === 'income') {
+    renderIncomeViews();
+  }
 }
 
 // イベントを正規化
@@ -993,21 +982,8 @@ function showShiftModal(shiftId = null, defaultDate = null) {
     if (notesInput) notesInput.value = '';
   }
   
-  // 時間候補を更新（モーダルを開いた直後と日付変更時）
-  if (dateInput) {
-    // 既存のリスナーを削除してから新しいリスナーを追加
-    const existingListener = dateInput._timeSuggestionListener;
-    if (existingListener) {
-      dateInput.removeEventListener('change', existingListener);
-    }
-    dateInput._timeSuggestionListener = () => {
-      setTimeout(updateTimeSuggestions, 100);
-    };
-    dateInput.addEventListener('change', dateInput._timeSuggestionListener);
-    
-    // 初期表示
-    setTimeout(updateTimeSuggestions, 200);
-  }
+  // 時間履歴を更新（モーダルを開いた直後）
+  setTimeout(updateTimeHistory, 100);
   
   if (modal) {
     modal.classList.add('show');
@@ -1100,16 +1076,33 @@ function createMonthDayElement(date, currentMonth) {
     div.classList.add('today');
   }
   
+  // その日のイベント（時間割は月次ビューで非表示）
+  const dayEvents = getEventsByDate(date);
+  const visibleEvents = dayEvents.filter(event => event.isTimetable !== true);
+  const hasTimetableEvents = dayEvents.some(event => event.isTimetable === true);
+  
   // 日付番号
   const dayNumber = document.createElement('div');
   dayNumber.className = 'month-day-number';
   dayNumber.textContent = date.getDate();
   div.appendChild(dayNumber);
   
-  // その日のイベント（時間割は月次ビューで非表示）
-  const dayEvents = getEventsByDate(date);
-  const visibleEvents = dayEvents.filter(event => event.isTimetable !== true);
-  const hasTimetableEvents = dayEvents.some(event => event.isTimetable === true);
+  // その日の収入を計算
+  let dailyIncome = 0;
+  visibleEvents.forEach(event => {
+    const income = calculateShiftIncome(event);
+    if (income && income.totalPay) {
+      dailyIncome += income.totalPay;
+    }
+  });
+  
+  // 収入を表示（ブロックなしで日付の下に）
+  if (dailyIncome > 0) {
+    const incomeDiv = document.createElement('div');
+    incomeDiv.className = 'month-day-income';
+    incomeDiv.textContent = formatCurrency(dailyIncome);
+    div.appendChild(incomeDiv);
+  }
 
   if (hasTimetableEvents) {
     div.classList.add('has-timetable');
@@ -1139,32 +1132,64 @@ function createMonthDayElement(date, currentMonth) {
         eventElement.style.color = '#1f2937';
       }
 
-      const time = document.createElement('span');
-      time.className = 'month-event-time';
-      // シフトデータの場合はstart（時間）を表示、なければstartTimeから抽出
-      let timeText = '';
+      // 開始時間を表示
+      let startTimeText = '';
       if (event.start) {
-        timeText = event.start;
+        startTimeText = event.start;
       } else if (event.startTime) {
-        timeText = formatTime(event.startTime);
+        startTimeText = formatTime(event.startTime);
       }
-      time.textContent = timeText;
-      if (!timeText) time.classList.add('hidden');
+      
+      // 終了時間を表示
+      let endTimeText = '';
+      if (event.end) {
+        endTimeText = event.end;
+      } else if (event.endTime) {
+        endTimeText = formatTime(event.endTime);
+      }
 
-      const title = document.createElement('span');
-      title.className = 'month-event-title';
       // シフトの場合、職場名（workplaceName）を優先表示、次にrole、最後にtitle
       const displayText = event.workplaceName || event.role || event.title || 'シフト';
-      title.textContent = truncateText(displayText, 15);
-
-      if (!time.classList.contains('hidden')) {
-        eventElement.appendChild(time);
+      
+      // PC表示では時間を一行、モバイルでは3行構成で表示
+      // 時間を一行で表示（PC表示用）
+      let timeText = '';
+      if (startTimeText && endTimeText) {
+        timeText = `${startTimeText}-${endTimeText}`;
+      } else if (startTimeText) {
+        timeText = startTimeText;
       }
+      
+      if (timeText) {
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'month-event-time-single';
+        timeDiv.textContent = timeText;
+        eventElement.appendChild(timeDiv);
+      }
+      
+      // 3行構成も用意（モバイル表示用）
+      if (startTimeText) {
+        const startTimeDiv = document.createElement('div');
+        startTimeDiv.className = 'month-event-start-time';
+        startTimeDiv.textContent = startTimeText;
+        eventElement.appendChild(startTimeDiv);
+      }
+
+      if (endTimeText) {
+        const endTimeDiv = document.createElement('div');
+        endTimeDiv.className = 'month-event-end-time';
+        endTimeDiv.textContent = endTimeText;
+        eventElement.appendChild(endTimeDiv);
+      }
+
+      const title = document.createElement('div');
+      title.className = 'month-event-title';
+      title.textContent = displayText;
       eventElement.appendChild(title);
 
       // Escape title for tooltip to prevent XSS
       const safeTitle = escapeHtml(displayText);
-      const timeStr = event.start ? event.start : (event.startTime ? formatTime(event.startTime) : '');
+      const timeStr = startTimeText && endTimeText ? `${startTimeText}-${endTimeText}` : (startTimeText || endTimeText);
       eventElement.title = timeStr ? `${safeTitle} (${timeStr})` : safeTitle;
       eventElement.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -2051,31 +2076,52 @@ function closeWorkplaceModal() {
 
 // ========== 時間候補機能 ==========
 
-// 過去の時間候補を取得（同じ職場の過去のシフトから取得）
-function getTimeSuggestions(workplaceId, date) {
-  if (!workplaceId || !Array.isArray(events)) return [];
+// すべての時間履歴を取得
+function getAllTimeHistory() {
+  if (!Array.isArray(events)) return [];
   
-  const suggestions = [];
-  const seen = new Set();
+  const history = [];
+  const seen = new Map(); // 時間+職場の組み合わせをキーにする
   
   events.forEach(event => {
-    if (!event.workplaceId || event.workplaceId !== workplaceId) return;
     if (!event.start || !event.end) return;
     
-    const key = `${event.start}-${event.end}`;
-    if (seen.has(key)) return;
-    seen.add(key);
+    const workplaceId = event.workplaceId || '';
+    const workplaceName = event.workplaceName || event.role || '職場未設定';
+    const key = `${event.start}-${event.end}-${workplaceId}`;
     
-    suggestions.push({
-      start: event.start,
-      end: event.end,
-      date: event.date || (event.startTime ? event.startTime.split('T')[0] : ''),
-      timestamp: event.createdAt || event.updatedAt || event.startTime || ''
-    });
+    // 既に同じ時間+職場の組み合わせがあれば、より新しい日付のものを使う
+    const existing = seen.get(key);
+    if (existing) {
+      const eventDate = event.date || (event.startTime ? event.startTime.split('T')[0] : '');
+      const existingDate = existing.date || '';
+      if (eventDate && (!existingDate || eventDate > existingDate)) {
+        seen.set(key, {
+          start: event.start,
+          end: event.end,
+          workplaceId: workplaceId,
+          workplaceName: workplaceName,
+          date: eventDate,
+          timestamp: event.createdAt || event.updatedAt || event.startTime || ''
+        });
+      }
+    } else {
+      seen.set(key, {
+        start: event.start,
+        end: event.end,
+        workplaceId: workplaceId,
+        workplaceName: workplaceName,
+        date: event.date || (event.startTime ? event.startTime.split('T')[0] : ''),
+        timestamp: event.createdAt || event.updatedAt || event.startTime || ''
+      });
+    }
   });
   
-  // 日付でソート（新しい順）
-  suggestions.sort((a, b) => {
+  // Mapから配列に変換
+  const historyArray = Array.from(seen.values());
+  
+  // タイムスタンプでソート（新しい順）
+  historyArray.sort((a, b) => {
     if (a.timestamp && b.timestamp) {
       return new Date(b.timestamp) - new Date(a.timestamp);
     }
@@ -2085,57 +2131,152 @@ function getTimeSuggestions(workplaceId, date) {
     return 0;
   });
   
-  return suggestions.slice(0, 5).map(s => ({ start: s.start, end: s.end })); // 最大5件
+  return historyArray.slice(0, 20); // 最大20件
 }
 
-// 時間候補を表示
-function updateTimeSuggestions() {
-  const container = safeGetElementById('timeSuggestionsContainer');
-  const suggestionsDiv = safeGetElementById('timeSuggestions');
-  const workplaceSelect = safeGetElementById('shiftWorkplace');
-  const dateInput = safeGetElementById('shiftDate');
+// 時間履歴を表示
+function updateTimeHistory() {
+  const container = safeGetElementById('timeHistoryContainer');
+  if (!container) return;
   
-  if (!container || !suggestionsDiv || !workplaceSelect || !dateInput) return;
+  const history = getAllTimeHistory();
   
-  const workplaceId = workplaceSelect.value;
-  const dateStr = dateInput.value;
-  
-  if (!workplaceId || !dateStr) {
-    container.style.display = 'none';
+  if (history.length === 0) {
+    container.innerHTML = '<p class="time-history-empty">入力履歴がありません。シフトを追加すると、ここに表示されます。</p>';
     return;
   }
   
-  const date = new Date(dateStr);
-  if (Number.isNaN(date.getTime())) {
-    container.style.display = 'none';
-    return;
-  }
+  container.innerHTML = history.map(item => {
+    const workplaceName = item.workplaceName || '職場未設定';
+    return `
+      <button type="button" class="time-history-item" 
+              data-start="${item.start}" 
+              data-end="${item.end}" 
+              data-workplace-id="${item.workplaceId || ''}">
+        <div class="time-history-workplace">${escapeHtml(workplaceName)}</div>
+        <div class="time-history-time-range">${item.start} - ${item.end}</div>
+      </button>
+    `;
+  }).join('');
   
-  const suggestions = getTimeSuggestions(workplaceId, date);
-  
-  if (suggestions.length === 0) {
-    container.style.display = 'none';
-    return;
-  }
-  
-  container.style.display = 'block';
-  suggestionsDiv.innerHTML = suggestions.map(s => `
-    <button type="button" class="time-suggestion-btn" data-start="${s.start}" data-end="${s.end}">
-      ${s.start} - ${s.end}
-    </button>
-  `).join('');
-  
-  // 候補ボタンのイベントリスナー
-  suggestionsDiv.querySelectorAll('.time-suggestion-btn').forEach(btn => {
+  // 履歴アイテムのイベントリスナー（クリックで直接予定を追加）
+  container.querySelectorAll('.time-history-item').forEach(btn => {
     const start = btn.dataset.start;
     const end = btn.dataset.end;
-    eventListeners.add(btn, 'click', () => {
-      const startInput = safeGetElementById('shiftStart');
-      const endInput = safeGetElementById('shiftEnd');
-      if (startInput) startInput.value = start;
-      if (endInput) endInput.value = end;
+    const workplaceId = btn.dataset.workplaceId || '';
+    
+    eventListeners.add(btn, 'click', async () => {
+      const dateInput = safeGetElementById('shiftDate');
+      const dateStr = dateInput ? dateInput.value : '';
+      
+      if (!dateStr) {
+        showMessage('日付を選択してください。', 'error', 3000);
+        return;
+      }
+      
+      if (!workplaceId) {
+        showMessage('職場が設定されていない履歴です。', 'error', 3000);
+        return;
+      }
+      
+      const workplace = workplaces.find(w => w.id === workplaceId);
+      if (!workplace) {
+        showMessage('職場が見つかりません。', 'error', 3000);
+        return;
+      }
+      
+      try {
+        showLoading('保存中...');
+        
+        const rate = workplace.rate || 0;
+        const startTime = `${dateStr}T${start}`;
+        const endTime = `${dateStr}T${end}`;
+        
+        // 労働時間と深夜時間を計算（22:00〜5:00 は深夜）
+        const { totalHours, nightHours } = calculateWorkAndNightHours(start, end);
+        // 6時間以上なら1時間休憩（無給）を引く
+        const breakHours = totalHours >= 6 ? 1 : 0;
+        const paidHours = Math.max(0, totalHours - breakHours);
+        
+        // 深夜割増（22:00〜5:00は1.25倍）
+        const basePay = paidHours * rate;
+        const nightExtra = nightHours * rate * 0.25;
+        const totalPay = basePay + nightExtra;
+
+        const event = {
+          title: workplace.name || 'シフト',
+          description: '',
+          startTime: startTime,
+          endTime: endTime,
+          color: '#3b82f6',
+          date: dateStr,
+          start: start,
+          end: end,
+          role: workplace.name,
+          workplaceId: workplaceId,
+          workplaceName: workplace.name,
+          rate: rate,
+          notes: '',
+          durationHours: paidHours,
+          rawDurationHours: totalHours,
+          breakHours: breakHours,
+          nightHours: nightHours,
+          totalPay: totalPay
+        };
+        
+        const newId = await addEvent(event);
+        if (newId) {
+          hideLoading();
+          closeEventModal();
+          showMessage('シフトを追加しました', 'success', 3000);
+          
+          // 収入タブが表示中の場合は更新
+          if (currentTab === 'income') {
+            renderIncomeViews();
+          }
+        } else {
+          hideLoading();
+          showMessage('シフトの保存に失敗しました。', 'error', 6000);
+        }
+      } catch (error) {
+        hideLoading();
+        console.error('シフト追加エラー:', error);
+        showMessage('シフトの追加に失敗しました。再度お試しください。', 'error', 6000);
+      }
     });
   });
+}
+
+// 時間の差を計算して表示（例: "8時間"）
+function calculateDuration(start, end) {
+  if (!start || !end) return '';
+  
+  const [startHour, startMin] = start.split(':').map(Number);
+  const [endHour, endMin] = end.split(':').map(Number);
+  
+  if (Number.isNaN(startHour) || Number.isNaN(startMin) || 
+      Number.isNaN(endHour) || Number.isNaN(endMin)) return '';
+  
+  let startTotalMin = startHour * 60 + startMin;
+  let endTotalMin = endHour * 60 + endMin;
+  
+  // 日をまたぐ場合は24時間を加算
+  if (endTotalMin <= startTotalMin) {
+    endTotalMin += 24 * 60;
+  }
+  
+  const totalMinutes = endTotalMin - startTotalMin;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  
+  if (hours > 0 && minutes > 0) {
+    return `${hours}時間${minutes}分`;
+  } else if (hours > 0) {
+    return `${hours}時間`;
+  } else if (minutes > 0) {
+    return `${minutes}分`;
+  }
+  return '';
 }
 
 // ========== 収入タブ機能 ==========
@@ -2823,7 +2964,6 @@ function setupEventListeners() {
           }
         }
         // 時間候補を更新
-        updateTimeSuggestions();
       } catch (error) {
         console.error('Error in shiftWorkplaceSelect handler:', error);
       }
@@ -2932,9 +3072,19 @@ function renderIncomeViews() {
 
   if (!monthStatsContainer || !yearChartContainer || !monthLabel || !yearLabel) return;
 
+  const yearStatsContainer = safeGetElementById('incomeYearStats');
+  
+  const monthProgressContainer = safeGetElementById('incomeMonthProgress');
+  
   if (!Array.isArray(events) || events.length === 0) {
     monthStatsContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 1rem;">データがありません。</p>';
-    yearChartContainer.innerHTML = '';
+    if (monthProgressContainer) {
+      monthProgressContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 1rem; text-align: center;">データがありません。</p>';
+    }
+    yearChartContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 1rem; text-align: center;">データがありません。</p>';
+    if (yearStatsContainer) {
+      yearStatsContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 1rem; text-align: center;">データがありません。</p>';
+    }
     return;
   }
 
@@ -2944,7 +3094,13 @@ function renderIncomeViews() {
 
   if (incomes.length === 0) {
     monthStatsContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 1rem;">データがありません。</p>';
-    yearChartContainer.innerHTML = '';
+    if (monthProgressContainer) {
+      monthProgressContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 1rem; text-align: center;">データがありません。</p>';
+    }
+    yearChartContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 1rem; text-align: center;">データがありません。</p>';
+    if (yearStatsContainer) {
+      yearStatsContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 1rem; text-align: center;">データがありません。</p>';
+    }
     return;
   }
 
@@ -2966,6 +3122,63 @@ function renderIncomeViews() {
     }
   });
 
+  // 月収入の円形プログレスバーを表示
+  const MONTHLY_TARGET = 90000; // 月9万円を目標
+  if (monthProgressContainer) {
+    const progressPercent = Math.min(100, (monthTotalPay / MONTHLY_TARGET) * 100);
+    const circumference = 2 * Math.PI * 45; // 半径45pxの円周
+    const offset = circumference - (progressPercent / 100) * circumference;
+    const isAchieved = monthTotalPay >= MONTHLY_TARGET;
+    const progressColor = isAchieved ? '#10b981' : 'var(--primary-color)';
+    const remainingText = monthTotalPay < MONTHLY_TARGET 
+      ? `あと ${formatCurrency(MONTHLY_TARGET - monthTotalPay)}` 
+      : '目標達成！';
+    
+    monthProgressContainer.innerHTML = `
+      <div class="income-progress-card">
+        <div class="income-progress-title">
+          <h3>月収目標</h3>
+          <div class="income-progress-target">目標: ${formatCurrency(MONTHLY_TARGET)}</div>
+        </div>
+        <div class="income-circular-progress">
+          <svg class="income-progress-svg" viewBox="0 0 100 100">
+            <!-- 背景の円 -->
+            <circle
+              class="income-progress-background"
+              cx="50"
+              cy="50"
+              r="45"
+              fill="none"
+              stroke="var(--bg-hover)"
+              stroke-width="8"
+            />
+            <!-- プログレスバーの円 -->
+            <circle
+              class="income-progress-circle ${isAchieved ? 'achieved' : ''}"
+              cx="50"
+              cy="50"
+              r="45"
+              fill="none"
+              stroke="${progressColor}"
+              stroke-width="8"
+              stroke-linecap="round"
+              stroke-dasharray="${circumference}"
+              stroke-dashoffset="${offset}"
+              transform="rotate(-90 50 50)"
+            />
+          </svg>
+          <div class="income-progress-content">
+            <div class="income-progress-amount" style="color: ${progressColor};">${formatCurrency(monthTotalPay)}</div>
+            <div class="income-progress-percent">${progressPercent.toFixed(1)}%</div>
+            <div class="income-progress-remaining ${isAchieved ? 'achieved' : ''}">
+              ${remainingText}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   monthStatsContainer.innerHTML = `
     <div class="income-stat-card">
       <h3>勤務時間（有給）</h3>
@@ -2977,12 +3190,15 @@ function renderIncomeViews() {
     </div>
   `;
 
-  // 年ビュー（棒グラフ）
+  // 年ビュー（統計情報と棒グラフ）
   const year = incomeCurrentYear;
   yearLabel.textContent = `${year}年`;
 
+  // 月ごとのデータを集計
   const monthBuckets = Array.from({ length: 12 }, () => ({
     totalPay: 0,
+    paidHours: 0,
+    shiftCount: 0,
   }));
 
   incomes.forEach(info => {
@@ -2990,23 +3206,207 @@ function renderIncomeViews() {
     const m = info.date.getMonth();
     if (y === year) {
       monthBuckets[m].totalPay += info.totalPay;
+      monthBuckets[m].paidHours += info.paidHours;
+      monthBuckets[m].shiftCount += 1;
     }
   });
 
-  const maxPay = Math.max(...monthBuckets.map(b => b.totalPay), 0) || 1;
-  const monthLabels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+  // 年間統計を計算
+  const yearTotalPay = monthBuckets.reduce((sum, bucket) => sum + bucket.totalPay, 0);
+  const yearTotalHours = monthBuckets.reduce((sum, bucket) => sum + bucket.paidHours, 0);
+  const yearShiftCount = monthBuckets.reduce((sum, bucket) => sum + bucket.shiftCount, 0);
+  const avgMonthlyPay = yearTotalPay / 12;
+  
+  // 最高/最低月を求める
+  const monthsWithData = monthBuckets.map((bucket, idx) => ({ ...bucket, month: idx + 1 }));
+  const monthsWithPay = monthsWithData.filter(b => b.totalPay > 0);
+  const maxMonth = monthsWithPay.length > 0 
+    ? monthsWithPay.reduce((max, bucket) => bucket.totalPay > max.totalPay ? bucket : max, monthsWithPay[0])
+    : null;
+  const minMonth = monthsWithPay.length > 0
+    ? monthsWithPay.reduce((min, bucket) => bucket.totalPay < min.totalPay ? bucket : min, monthsWithPay[0])
+    : null;
 
-  yearChartContainer.innerHTML = monthBuckets
+  // 年間統計情報を表示
+  if (yearStatsContainer) {
+    yearStatsContainer.innerHTML = `
+      <div class="income-stat-card">
+        <h3>年間合計</h3>
+        <div class="amount">${formatCurrency(yearTotalPay)}</div>
+      </div>
+      <div class="income-stat-card">
+        <h3>平均月収</h3>
+        <div class="amount">${formatCurrency(avgMonthlyPay)}</div>
+      </div>
+      <div class="income-stat-card">
+        <h3>年間勤務時間</h3>
+        <div class="amount">${yearTotalHours.toFixed(2)} h</div>
+      </div>
+      <div class="income-stat-card">
+        <h3>シフト回数</h3>
+        <div class="amount">${yearShiftCount} 回</div>
+      </div>
+      ${maxMonth ? `
+      <div class="income-stat-card">
+        <h3>最高月収</h3>
+        <div class="amount">${formatCurrency(maxMonth.totalPay)}</div>
+        <div class="amount-sub">${maxMonth.month}月</div>
+      </div>
+      ` : ''}
+      ${minMonth && minMonth.month !== maxMonth?.month ? `
+      <div class="income-stat-card">
+        <h3>最低月収</h3>
+        <div class="amount">${formatCurrency(minMonth.totalPay)}</div>
+        <div class="amount-sub">${minMonth.month}月</div>
+      </div>
+      ` : ''}
+    `;
+  }
+
+  // グラフを描画
+  const maxPay = Math.max(...monthBuckets.map(b => b.totalPay), 0) || 1;
+  const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+  
+  // グラフコンテナを作成
+  let chartHTML = '<div class="income-year-chart-wrapper">';
+  
+  // Y軸のラベル（最大値の約25%, 50%, 75%, 100%）
+  chartHTML += '<div class="income-year-chart-y-axis">';
+  const yAxisValues = [
+    Math.ceil(maxPay),
+    Math.ceil(maxPay * 0.75),
+    Math.ceil(maxPay * 0.5),
+    Math.ceil(maxPay * 0.25)
+  ];
+  yAxisValues.forEach(val => {
+    chartHTML += `<div class="income-year-chart-y-label">${formatCurrency(val)}</div>`;
+  });
+  chartHTML += '</div>';
+  
+  // グラフエリア
+  chartHTML += '<div class="income-year-chart-bars">';
+  chartHTML += monthBuckets
     .map((bucket, idx) => {
-      const heightPercent = Math.max(4, (bucket.totalPay / maxPay) * 100);
+      const heightPercent = bucket.totalPay > 0 
+        ? Math.max(4, (bucket.totalPay / maxPay) * 100)
+        : 0;
+      const hasData = bucket.totalPay > 0;
+      const tooltipText = hasData
+        ? `${monthNames[idx]}\n収入: ${formatCurrency(bucket.totalPay)}\n勤務時間: ${bucket.paidHours.toFixed(2)}h\nシフト: ${bucket.shiftCount}回`
+        : `${monthNames[idx]}\nデータなし`;
+      
       return `
-        <div class="income-year-bar" title="${formatCurrency(bucket.totalPay)}">
-          <div class="income-year-bar-inner" style="height: ${heightPercent}%"></div>
-          <div class="income-year-bar-label">${monthLabels[idx]}</div>
+        <div class="income-year-bar-wrapper">
+          <div 
+            class="income-year-bar ${hasData ? 'has-data' : 'no-data'}" 
+            data-month="${idx + 1}"
+            data-amount="${bucket.totalPay}"
+            data-hours="${bucket.paidHours.toFixed(2)}"
+            data-shifts="${bucket.shiftCount}"
+            data-width-percent="${heightPercent}"
+            title="${escapeHtml(tooltipText)}"
+          >
+            <div class="income-year-bar-inner" style="height: ${heightPercent}%;" data-width-percent="${heightPercent}">
+              ${hasData ? `<div class="income-year-bar-value">${formatCurrency(bucket.totalPay)}</div>` : ''}
+            </div>
+            <div class="income-year-bar-label">${monthNames[idx]}</div>
+          </div>
         </div>
       `;
     })
     .join('');
+  chartHTML += '</div>';
+  
+  chartHTML += '</div>'; // chart-wrapper終了
+  
+  yearChartContainer.innerHTML = chartHTML;
+  
+  // モバイル表示時にバーの幅を設定（横バーグラフ用）
+  const isMobile = window.innerWidth <= 640;
+  if (isMobile) {
+    setTimeout(() => {
+      yearChartContainer.querySelectorAll('.income-year-bar').forEach(bar => {
+        const inner = bar.querySelector('.income-year-bar-inner');
+        if (!inner) return;
+        
+        const widthPercent = parseFloat(inner.dataset.widthPercent) || 0;
+        if (widthPercent <= 0) {
+          inner.style.width = '0px';
+          return;
+        }
+        
+        // 親要素の幅を取得
+        const wrapper = bar.closest('.income-year-bar-wrapper');
+        if (!wrapper || wrapper.offsetWidth === 0) return;
+        
+        const wrapperWidth = wrapper.offsetWidth;
+        // ラベル部分の幅を取得
+        const labelElement = bar.querySelector('.income-year-bar-label');
+        const labelWidth = labelElement ? labelElement.offsetWidth : 32;
+        const gap = 6.4; // 0.4rem ≈ 6.4px
+        const availableWidth = wrapperWidth - labelWidth - gap;
+        
+        // 最大値に対する収入の割合を横幅（ピクセル）に変換
+        // widthPercentは0-100の範囲で、これを利用可能な幅（availableWidth）に対する割合として計算
+        const calculatedWidthPx = Math.max(5, (widthPercent / 100) * availableWidth);
+        inner.style.width = `${calculatedWidthPx}px`;
+        inner.style.height = '1.25rem';
+        inner.style.minHeight = '1.25rem';
+        inner.style.maxHeight = '1.25rem';
+      });
+    }, 150);
+  }
+  
+  // ホバー時の詳細表示を設定
+  yearChartContainer.querySelectorAll('.income-year-bar.has-data').forEach(bar => {
+    const amount = parseFloat(bar.dataset.amount) || 0;
+    const hours = parseFloat(bar.dataset.hours) || 0;
+    const shifts = parseInt(bar.dataset.shifts) || 0;
+    const month = bar.dataset.month;
+    
+    bar.addEventListener('mouseenter', (e) => {
+      const tooltip = document.createElement('div');
+      tooltip.className = 'income-year-bar-tooltip';
+      tooltip.innerHTML = `
+        <div class="tooltip-header">${monthNames[parseInt(month) - 1]}</div>
+        <div class="tooltip-content">
+          <div class="tooltip-item">
+            <span class="tooltip-label">収入:</span>
+            <span class="tooltip-value">${formatCurrency(amount)}</span>
+          </div>
+          <div class="tooltip-item">
+            <span class="tooltip-label">勤務時間:</span>
+            <span class="tooltip-value">${hours.toFixed(2)}h</span>
+          </div>
+          <div class="tooltip-item">
+            <span class="tooltip-label">シフト:</span>
+            <span class="tooltip-value">${shifts}回</span>
+          </div>
+        </div>
+      `;
+      
+      const rect = bar.getBoundingClientRect();
+      tooltip.style.position = 'fixed';
+      tooltip.style.top = `${rect.top - tooltip.offsetHeight - 10}px`;
+      tooltip.style.left = `${rect.left + rect.width / 2}px`;
+      tooltip.style.transform = 'translateX(-50%)';
+      
+      document.body.appendChild(tooltip);
+      bar.dataset.tooltipId = 'tooltip-' + Date.now();
+      tooltip.id = bar.dataset.tooltipId;
+    });
+    
+    bar.addEventListener('mouseleave', () => {
+      const tooltipId = bar.dataset.tooltipId;
+      if (tooltipId) {
+        const tooltip = document.getElementById(tooltipId);
+        if (tooltip) {
+          tooltip.remove();
+        }
+        delete bar.dataset.tooltipId;
+      }
+    });
+  });
 }
 
 function setupIncomeViewControlsOnce() {
