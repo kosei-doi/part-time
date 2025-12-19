@@ -968,7 +968,6 @@ body {
 /* ドット表示のホバー効果 */
 .month-event-dot-item:hover {
   opacity: 0.8;
-}
   box-shadow: var(--shadow-md);
 }
 
