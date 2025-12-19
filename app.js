@@ -23,7 +23,6 @@ const eventListeners = {
         this.listeners.splice(index, 1);
       }
     } catch (error) {
-      console.warn('Failed to remove event listener:', error);
     }
   },
   removeAll: function() {
@@ -31,7 +30,6 @@ const eventListeners = {
       try {
         listener.element.removeEventListener(listener.event, listener.handler, listener.options);
       } catch (error) {
-        console.warn('Failed to remove event listener:', error);
       }
     });
     this.listeners = [];
@@ -55,44 +53,6 @@ const HOUR_HEIGHT_PX = 25; // フォールバック値（実際の値は動的�
 const MIN_EVENT_HEIGHT_PX = 15;
 const VISIBLE_HOURS = VISIBLE_END_HOUR - VISIBLE_START_HOUR + 1;
 
-// 時間スロットの実際の高さを取得（1時間分）
-function getHourHeight() {
-  // 日次ビューまたは週次ビューの時間スロットを探す
-  const timeSlot = document.querySelector('.time-slot');
-  if (timeSlot) {
-    const rect = timeSlot.getBoundingClientRect();
-    if (rect.height > 0) {
-      return rect.height;
-    }
-  }
-  // フォールバック: 週次ビューのday-events-containerの高さを20で割る（優先）
-  const weekContainer = document.querySelector('.day-events-container');
-  if (weekContainer) {
-    const rect = weekContainer.getBoundingClientRect();
-    if (rect.height > 0) {
-      return rect.height / 20;
-    }
-  }
-  // フォールバック: イベントコンテナの高さを20で割る（日次ビュー）
-  const dayContainer = document.querySelector('.event-container');
-  if (dayContainer) {
-    const rect = dayContainer.getBoundingClientRect();
-    if (rect.height > 0) {
-      return rect.height / 20;
-    }
-  }
-  return HOUR_HEIGHT_PX;
-}
-
-// 16進数カラーをRGBに変換
-function hexToRgb(hex) {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? {
-    r: parseInt(result[1], 16),
-    g: parseInt(result[2], 16),
-    b: parseInt(result[3], 16)
-  } : null;
-}
 
 // 月次ビューのみなのでviewCachesは不要
 
@@ -102,9 +62,7 @@ function showMessage(message, type = 'info', duration = 4000) {
   const area = safeGetElementById('notificationArea');
   if (!area) {
     if (type === 'error') {
-      console.error(message);
     } else {
-      console.info(message);
     }
     return;
   }
@@ -199,9 +157,7 @@ function hideLoading() {
   const overlay = safeGetElementById('loadingOverlay');
   if (overlay) {
     overlay.classList.add('hidden');
-    console.log('ローディングオーバーレイを非表示にしました');
   } else {
-    console.warn('ローディングオーバーレイが見つかりませんでした');
   }
 }
 
@@ -209,7 +165,6 @@ function hideLoading() {
 function safeGetElementById(id) {
   const element = document.getElementById(id);
   if (!element) {
-    console.warn(`Element with id "${id}" not found`);
   }
   return element;
 }
@@ -219,11 +174,9 @@ function checkFirebase() {
   try {
     if (typeof window.firebase !== 'undefined' && window.firebase.db) {
       isFirebaseEnabled = true;
-      console.log('Firebase v11 Realtime Database が有効です');
       return true;
     }
   } catch (error) {
-    console.error('Firebase が利用できません。', error);
   }
   isFirebaseEnabled = false;
   return false;
@@ -241,7 +194,6 @@ async function deduplicateFirebaseEvents() {
 // Firebase set をタイムアウト付きで実行するヘルパー
 async function firebaseSetWithTimeout(ref, value, timeoutMs = 10000) {
   const start = Date.now();
-  console.log('firebaseSetWithTimeout 開始', { timeoutMs });
   try {
     const result = await Promise.race([
       window.firebase.set(ref, value),
@@ -253,11 +205,9 @@ async function firebaseSetWithTimeout(ref, value, timeoutMs = 10000) {
       ),
     ]);
     const duration = Date.now() - start;
-    console.log('firebaseSetWithTimeout 成功', { duration });
     return result;
   } catch (error) {
     const duration = Date.now() - start;
-    console.error('firebaseSetWithTimeout 失敗', { duration, error });
     throw error;
   }
 }
@@ -291,6 +241,16 @@ function normalizeEventFromSnapshot(snapshot, key) {
     const endTime = `${payload.date}T${payload.end}`;
     // 職場名を取得（workplaceNameがあればそれを使う、なければroleを使う）
     const workplaceName = payload.workplaceName || payload.role || 'シフト';
+
+    // 職場IDがある場合は職場の色を取得
+    let eventColor = '#3b82f6'; // デフォルトの青色
+    if (payload.workplaceId) {
+      const workplace = workplaces.find(w => w.id === payload.workplaceId);
+      if (workplace && workplace.color) {
+        eventColor = workplace.color;
+      }
+    }
+
     return {
       ...payload,
       id: key,
@@ -298,7 +258,7 @@ function normalizeEventFromSnapshot(snapshot, key) {
       description: payload.notes || '',
       startTime: startTime,
       endTime: endTime,
-      color: '#3b82f6', // デフォルトの青色
+      color: eventColor,
       role: workplaceName, // 互換性のため
     };
   }
@@ -321,7 +281,6 @@ function normalizeEventFromSnapshot(snapshot, key) {
 async function loadEvents() {
   if (!isFirebaseEnabled || !window.firebase?.db) {
     const message = 'Firebaseが無効のため、予定を読み込めません。設定を確認してください。';
-    console.error(message);
     showMessage(message, 'error', 6000);
     return;
   }
@@ -367,16 +326,13 @@ async function loadEvents() {
         if (Number.isNaN(bTime)) return -1;
         return aTime - bTime;
       });
-      console.log('Firebaseからイベントを初回読み込み:', events.length, '件');
       
       // Firebase内の重複チェックを実行
       try {
         const { deleted } = await deduplicateFirebaseEvents();
         if (deleted > 0) {
-          console.log(`[Firebase重複削除] 初回読み込み時に ${deleted}件の重複を削除しました`);
         }
       } catch (error) {
-        console.error('[Firebase重複削除] エラー:', error);
       }
       
       updateViews();
@@ -386,7 +342,6 @@ async function loadEvents() {
       updateViews();
     }
   } catch (error) {
-    console.error('Firebaseからの初回読み込みに失敗しました。', error);
     showMessage('予定の読み込みに失敗しました。ネットワークを確認してください。', 'error', 6000);
     return;
   }
@@ -411,15 +366,12 @@ async function loadEvents() {
           if (Number.isNaN(bTime)) return -1;
           return aTime - bTime;
         });
-        console.log('Firebase: イベント追加', key);
         updateViewsForEvent(newEvent);
       }
     } catch (error) {
-      console.error('Firebase onChildAdded コールバックエラー:', error);
       // エラーが発生してもアプリを停止させない
     }
   }, (error) => {
-    console.error('Firebase onChildAdded エラー:', error);
     showMessage('予定の追加に失敗しました。', 'error', 4000);
   });
   
@@ -450,7 +402,6 @@ async function loadEvents() {
         const wasInRange = isEventInAllowedRange(oldEvent, allowedRanges);
         const isInRange = isEventInAllowedRange(updatedEvent, allowedRanges);
         
-        console.log('Firebase: イベント更新', key);
         // 範囲外→範囲内、範囲内→範囲外、範囲内で日付変更の場合は更新
         if (wasInRange || isInRange) {
           updateViewsForEvent(updatedEvent);
@@ -461,11 +412,9 @@ async function loadEvents() {
         }
       }
     } catch (error) {
-      console.error('Firebase onChildChanged コールバックエラー:', error);
       // エラーが発生してもアプリを停止させない
     }
   }, (error) => {
-    console.error('Firebase onChildChanged エラー:', error);
     showMessage('予定の更新に失敗しました。', 'error', 4000);
   });
   
@@ -478,15 +427,12 @@ async function loadEvents() {
       if (existingIndex !== -1) {
         const removedEvent = events[existingIndex];
         events.splice(existingIndex, 1);
-        console.log('Firebase: イベント削除', key);
         updateViewsForEvent(removedEvent);
       }
     } catch (error) {
-      console.error('Firebase onChildRemoved コールバックエラー:', error);
       // エラーが発生してもアプリを停止させない
     }
   }, (error) => {
-    console.error('Firebase onChildRemoved エラー:', error);
     showMessage('予定の削除に失敗しました。', 'error', 4000);
   });
   
@@ -525,7 +471,6 @@ async function addEvent(event, options = {}) {
 
   if (!isFirebaseEnabled || !window.firebase?.db) {
     const message = 'Firebaseが無効のため、イベントを保存できません。設定を確認してください。';
-    console.error(message);
     showMessage(message, 'error', 6000);
     return null;
   }
@@ -537,11 +482,9 @@ async function addEvent(event, options = {}) {
     const { id: _omitId, ...payload } = newEvent;
     await window.firebase.set(newEventRef, payload);
     const newId = newEventRef.key;
-    console.log('Firebaseにシフトを追加:', newId);
 
     return newId;
   } catch (error) {
-    console.error('Firebaseにシフトを追加できませんでした。', error);
     showMessage('シフトを保存できませんでした。ネットワークやFirebase設定を確認してください。', 'error', 6000);
     return null;
   }
@@ -568,7 +511,6 @@ async function updateEvent(id, event, options = {}) {
 
   if (!isFirebaseEnabled || !window.firebase?.db) {
     const message = 'Firebaseが無効のため、イベントを更新できません。設定を確認してください。';
-    console.error(message);
     showMessage(message, 'error', 6000);
     return false;
   }
@@ -576,9 +518,7 @@ async function updateEvent(id, event, options = {}) {
   const eventRef = window.firebase.ref(window.firebase.db, `shifts/${id}`);
   try {
     await window.firebase.update(eventRef, updatedEvent);
-    console.log('Firebaseでシフトを更新:', id);
   } catch (error) {
-    console.error('Firebaseでシフトの更新に失敗しました。', error);
     showMessage('シフトの更新に失敗しました。ネットワーク状況を確認してください。', 'error', 6000);
     return false;
   }
@@ -590,7 +530,6 @@ async function updateEvent(id, event, options = {}) {
 async function deleteEvent(id, options = {}) {
   if (!isFirebaseEnabled || !window.firebase?.db) {
     const message = 'Firebaseが無効のため、イベントを削除できません。設定を確認してください。';
-    console.error(message);
     showMessage(message, 'error', 6000);
     return false;
   }
@@ -600,9 +539,7 @@ async function deleteEvent(id, options = {}) {
 
   try {
     await window.firebase.remove(eventRef);
-    console.log('Firebaseからシフトを削除:', id);
   } catch (error) {
-    console.error('Firebaseからシフトを削除できませんでした。', error);
     showMessage('シフトの削除に失敗しました。再度お試しください。', 'error', 6000);
     return false;
   }
@@ -640,7 +577,6 @@ async function clearAllEvents({ skipConfirm = false, silent = false } = {}) {
     }
     return true;
   } catch (error) {
-    console.error('Firebaseイベント削除エラー:', error);
     if (!silent) {
       hideLoading();
       showMessage('予定の削除に失敗しました。再度お試しください。', 'error', 6000);
@@ -709,200 +645,13 @@ function getEventsByDate(date) {
 
 // calculateEventGroups関数は削除（day/weekビューのみで使用）
 
-function getEventRenderSignature(event, { variant } = {}) {
-  return [
-    event.id || '',
-    event.title || '',
-    event.description || '',
-    event.startTime || '',
-    event.endTime || '',
-    event.color || '',
-    event.allDay === true ? '1' : '0',
-    event.isTimetable === true ? '1' : '0',
-    event.reminderMinutes ?? '',
-    variant || '',
-  ].join('|');
-}
 
-function populateEventElement(element, event, options = {}) {
-  const { variant } = options;
-  const isAllDay = variant === 'all-day' || isAllDayEvent(event);
-  element.className = 'event-item';
-  if (isAllDay) element.classList.add('all-day');
-  if (event.isTimetable === true) element.classList.add('timetable-event');
-  element.style.backgroundColor = event.color || '#3b82f6';
-  element.dataset.eventId = event.id;
-  if (event.isTimetable === true) {
-    element.dataset.isTimetable = 'true';
-  } else {
-    delete element.dataset.isTimetable;
-  }
-  if (isAllDay) {
-    element.dataset.allDay = 'true';
-  } else {
-    delete element.dataset.allDay;
-  }
-  element.tabIndex = 0;
-  element.setAttribute('role', 'button');
-  const fullTitle = event.title || '(無題)';
-  const displayTitle = truncateText(fullTitle, 30);
 
-  if (isAllDay) {
-    element.setAttribute('aria-label', `${fullTitle} (終日)`);
-    element.innerHTML = `
-      <div class="event-title">${escapeHtml(displayTitle)}</div>
-    `;
-  } else {
-    const startLabel = event.startTime ? formatTime(event.startTime) : '--:--';
-    const endLabel = event.endTime ? formatTime(event.endTime) : '--:--';
-    element.setAttribute('aria-label', `${fullTitle}, ${startLabel}から${endLabel}`);
-    element.innerHTML = `
-      <div class="resize-handle top"></div>
-      <div class="event-title">${escapeHtml(displayTitle)}</div>
-      <div class="event-time">${startLabel} - ${endLabel}</div>
-      <div class="resize-handle bottom"></div>
-    `;
-  }
 
-  delete element.dataset.resizeBound;
-  element.dataset.renderSignature = getEventRenderSignature(event, { variant });
-}
 
-function bindEventElementInteractions(element) {
-  if (element.dataset.interactionBound === 'true') return;
-  element.dataset.interactionBound = 'true';
-  element.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const id = element.dataset.eventId;
-    if (id) showShiftModal(id);
-  });
-  element.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      const id = element.dataset.eventId;
-      if (id) showShiftModal(id);
-    }
-  });
-}
 
-function createEventElement(event, options = {}) {
-  const div = document.createElement('div');
-  populateEventElement(div, event, options);
-  bindEventElementInteractions(div);
-  return div;
-}
-
-function applyOverlapStyles(element, groupInfo) {
-  if (!element) return;
-  if (!groupInfo || groupInfo.totalInGroup <= 1) {
-    element.style.left = '';
-    element.style.right = '';
-    return;
-  }
-  const widthPercent = 100 / groupInfo.totalInGroup;
-  const leftPercent = widthPercent * groupInfo.indexInGroup;
-  element.style.left = `${leftPercent}%`;
-  element.style.right = `${100 - (leftPercent + widthPercent)}%`;
-}
-
-function syncEventElements(container, events, cacheMap, { variant, positionEvent, positionContext } = {}) {
-  if (!container || !Array.isArray(events)) return;
-  const processedIds = new Set();
-
-  events.forEach((event, index) => {
-    if (!event?.id) return;
-    const signature = getEventRenderSignature(event, { variant });
-    const cached = cacheMap.get(event.id);
-    let element = cached?.element;
-    if (!element) {
-      element = createEventElement(event, { variant });
-      cacheMap.set(event.id, { element, signature });
-    } else if (cached.signature !== signature) {
-      populateEventElement(element, event, { variant });
-      cacheMap.set(event.id, { element, signature });
-    } else {
-      element.dataset.eventId = event.id;
-    }
-
-    if (typeof positionEvent === 'function') {
-      positionEvent(element, event, positionContext);
-    }
-
-    const referenceNode = container.children[index];
-    if (referenceNode !== element) {
-      container.insertBefore(element, referenceNode || null);
-    }
-    processedIds.add(event.id);
-  });
-
-  Array.from(cacheMap.entries()).forEach(([id, info]) => {
-    if (!processedIds.has(id)) {
-      const element = info?.element;
-      if (element && element.parentElement === container) {
-        container.removeChild(element);
-      }
-      cacheMap.delete(id);
-    }
-  });
-}
 
 // 日次ビューでのイベント配置
-function positionEventInDayView(element, event) {
-  if (isAllDayEvent(event)) {
-    element.style.position = 'relative';
-    element.style.top = '';
-    element.style.height = '';
-    element.style.left = '';
-    element.style.right = '';
-    return;
-  }
-
-  if (!event.startTime || !event.endTime) {
-    // Invalid event times, don't position
-    return;
-  }
-
-  const startTime = new Date(event.startTime);
-  const endTime = new Date(event.endTime);
-  
-  if (Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) {
-    // Invalid dates, don't position
-    return;
-  }
-  
-  // 時間スロットの実際の高さを取得
-  const hourHeight = getHourHeight();
-  
-  // タイトルだけを表示するための最低高さ（1時間分の高さの約30%）
-  const MIN_HEIGHT_TITLE_ONLY = hourHeight * 0.3;
-  // タイトルと時間の両方を表示するための最低高さ（1.5時間分）
-  const MIN_HEIGHT_FOR_TIME = hourHeight * 1.5;
-  
-  const startMinutesTotal = startTime.getHours() * 60 + startTime.getMinutes();
-  const endMinutesTotal = endTime.getHours() * 60 + endTime.getMinutes();
-  const visibleStartMinutes = VISIBLE_START_HOUR * 60;
-  const visibleEndMinutes = (VISIBLE_END_HOUR + 1) * 60;
-
-  const startMinutesFromVisible = Math.max(0, startMinutesTotal - visibleStartMinutes);
-  const endMinutesFromVisible = Math.max(startMinutesFromVisible + 15, Math.min(visibleEndMinutes - visibleStartMinutes, endMinutesTotal - visibleStartMinutes));
-
-  const top = (startMinutesFromVisible / 60) * hourHeight;
-  const calculatedHeight = (endMinutesFromVisible - startMinutesFromVisible) / 60 * hourHeight;
-  const height = Math.max(MIN_HEIGHT_TITLE_ONLY, calculatedHeight);
-
-  element.style.top = `${top}px`;
-  element.style.height = `${height}px`;
-  
-  // 高さが最低高さ以下の場合は時間要素を非表示
-  const timeElement = element.querySelector('.event-time');
-  if (timeElement) {
-    if (calculatedHeight < MIN_HEIGHT_FOR_TIME) {
-      timeElement.style.display = 'none';
-    } else {
-      timeElement.style.display = '';
-    }
-  }
-}
 
 // モーダル表示
 // シフトモーダルを開く（日付を指定して新規作成）
@@ -925,7 +674,6 @@ function showShiftModal(shiftId = null, defaultDate = null) {
   
   // 必須要素のチェック
   if (!modal || !modalTitle || !form || !dateInput || !startInput || !endInput || !workplaceSelect) {
-    console.error('Shift modal required elements not found');
     return;
   }
   
@@ -1026,7 +774,6 @@ function updateDateDisplay() {
 function renderMonthView() {
   const monthGrid = safeGetElementById('monthGrid');
   if (!monthGrid) {
-    console.warn('Month grid not found');
     return;
   }
   monthGrid.innerHTML = '';
@@ -1060,7 +807,6 @@ function createMonthDayElement(date, currentMonth) {
   div.className = 'month-day';
   // Validate date before calling toISOString()
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    console.warn('Invalid date passed to createMonthDayElement');
     return div;
   }
   div.dataset.date = date.toISOString().split('T')[0];
@@ -1114,82 +860,83 @@ function createMonthDayElement(date, currentMonth) {
     const eventsContainer = document.createElement('div');
     eventsContainer.className = 'month-day-events';
     
-    // 最大3件まで表示（背景色 + 時刻 + タイトル）
-    visibleEvents.slice(0, 3).forEach(event => {
+    // 最大5件まで表示（色付きドット + 時間）
+    visibleEvents.slice(0, 5).forEach(event => {
       const eventElement = document.createElement('div');
-      eventElement.className = 'month-event-item';
-      
-      // イベントの色を背景色として使用
-      const eventColor = event.color || '#3b82f6';
-      eventElement.style.backgroundColor = eventColor;
-      
-      // 背景色に応じて文字色を調整（明るい色の場合は暗い文字、暗い色の場合は明るい文字）
-      const rgb = hexToRgb(eventColor);
-      if (rgb) {
-        const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
-        eventElement.style.color = brightness > 128 ? '#1f2937' : '#ffffff';
-      } else {
-        eventElement.style.color = '#1f2937';
+      eventElement.className = 'month-event-dot-item';
+
+      // イベントの色を取得（職場の色を優先）
+      let eventColor = '#3b82f6'; // デフォルトの青色
+
+      // workplaceIdがある場合は職場の色を優先的に使用
+      if (event.workplaceId) {
+        const workplace = workplaces.find(w => w.id === event.workplaceId);
+        if (workplace && workplace.color) {
+          eventColor = workplace.color;
+        }
       }
 
-      // 開始時間を表示
+      // 職場が見つからない場合のみevent.colorを使用
+      if (eventColor === '#3b82f6' && event.color) {
+        eventColor = event.color;
+      }
+
+      // 開始時間と終了時間を取得（短縮表記）
       let startTimeText = '';
       if (event.start) {
         startTimeText = event.start;
       } else if (event.startTime) {
-        startTimeText = formatTime(event.startTime);
+        startTimeText = formatTimeShort(event.startTime);
       }
-      
-      // 終了時間を表示
+
       let endTimeText = '';
       if (event.end) {
         endTimeText = event.end;
       } else if (event.endTime) {
-        endTimeText = formatTime(event.endTime);
+        endTimeText = formatTimeShort(event.endTime);
+      }
+
+      // 色付きドットを作成
+      const dotElement = document.createElement('span');
+      dotElement.className = 'month-event-dot';
+      dotElement.style.backgroundColor = eventColor;
+      eventElement.appendChild(dotElement);
+
+      // 時間を表示（開始時間と終了時間を別行で）
+      const timeContainer = document.createElement('div');
+      timeContainer.className = 'month-event-times';
+
+      if (startTimeText) {
+        const startSpan = document.createElement('span');
+        startSpan.className = 'month-event-time-start';
+        startSpan.textContent = startTimeText;
+        timeContainer.appendChild(startSpan);
+      }
+
+      if (endTimeText) {
+        const endSpan = document.createElement('span');
+        endSpan.className = 'month-event-time-end';
+        endSpan.textContent = endTimeText;
+        timeContainer.appendChild(endSpan);
+      }
+
+      if (startTimeText || endTimeText) {
+        eventElement.appendChild(timeContainer);
       }
 
       // シフトの場合、職場名（workplaceName）を優先表示、次にrole、最後にtitle
       const displayText = event.workplaceName || event.role || event.title || 'シフト';
-      
-      // PC表示では時間を一行、モバイルでは3行構成で表示
-      // 時間を一行で表示（PC表示用）
-      let timeText = '';
-      if (startTimeText && endTimeText) {
-        timeText = `${startTimeText}-${endTimeText}`;
-      } else if (startTimeText) {
-        timeText = startTimeText;
-      }
-      
-      if (timeText) {
-        const timeDiv = document.createElement('div');
-        timeDiv.className = 'month-event-time-single';
-        timeDiv.textContent = timeText;
-        eventElement.appendChild(timeDiv);
-      }
-      
-      // 3行構成も用意（モバイル表示用）
-      if (startTimeText) {
-        const startTimeDiv = document.createElement('div');
-        startTimeDiv.className = 'month-event-start-time';
-        startTimeDiv.textContent = startTimeText;
-        eventElement.appendChild(startTimeDiv);
-      }
-
-      if (endTimeText) {
-        const endTimeDiv = document.createElement('div');
-        endTimeDiv.className = 'month-event-end-time';
-        endTimeDiv.textContent = endTimeText;
-        eventElement.appendChild(endTimeDiv);
-      }
-
-      const title = document.createElement('div');
-      title.className = 'month-event-title';
-      title.textContent = displayText;
-      eventElement.appendChild(title);
 
       // Escape title for tooltip to prevent XSS
       const safeTitle = escapeHtml(displayText);
-      const timeStr = startTimeText && endTimeText ? `${startTimeText}-${endTimeText}` : (startTimeText || endTimeText);
+      let timeStr = '';
+      if (startTimeText && endTimeText) {
+        timeStr = `${startTimeText}-${endTimeText}`;
+      } else if (startTimeText) {
+        timeStr = startTimeText;
+      } else if (endTimeText) {
+        timeStr = endTimeText;
+      }
       eventElement.title = timeStr ? `${safeTitle} (${timeStr})` : safeTitle;
       eventElement.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1198,11 +945,14 @@ function createMonthDayElement(date, currentMonth) {
       eventsContainer.appendChild(eventElement);
     });
     
-    // 3件を超える場合は「+N」を表示
-    if (visibleEvents.length > 3) {
+    // 5件を超える場合は「+N」を表示
+    if (visibleEvents.length > 5) {
       const moreElement = document.createElement('div');
-      moreElement.className = 'month-event-item';
-      moreElement.textContent = `+${visibleEvents.length - 3}`;
+      moreElement.className = 'month-event-dot-item';
+      const moreSpan = document.createElement('span');
+      moreSpan.className = 'month-event-more';
+      moreSpan.textContent = `+${visibleEvents.length - 5}`;
+      moreElement.appendChild(moreSpan);
       eventsContainer.appendChild(moreElement);
     }
     
@@ -1270,6 +1020,15 @@ function formatTime(dateTimeString) {
   const date = new Date(dateTimeString);
   if (Number.isNaN(date.getTime())) return '--:--';
   const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+// 短縮版フォーマット（カレンダー表示用）
+function formatTimeShort(dateTimeString) {
+  const date = new Date(dateTimeString);
+  if (Number.isNaN(date.getTime())) return '--:--';
+  const hours = date.getHours(); // 先頭の0を付けない
   const minutes = date.getMinutes().toString().padStart(2, '0');
   return `${hours}:${minutes}`;
 }
@@ -1389,10 +1148,6 @@ function getAllowedDateRanges() {
 
 function logAllowedRanges(label) {
   const { rangeStart, rangeEnd } = getAllowedDateRanges();
-  console.log(
-    `${label} target range:`,
-    `${formatDateOnly(rangeStart)}〜${formatDateOnly(rangeEnd)}`
-  );
 }
 
 function isEventInAllowedRange(event, ranges) {
@@ -1448,7 +1203,6 @@ function scheduleAllNotifications() {
       scheduledTimeouts.push(timeout);
     });
   }).catch((error) => {
-    console.error('通知のスケジュールに失敗しました:', error);
   });
 }
 
@@ -1469,7 +1223,6 @@ function exportEventsAsJSON(range = 'all') {
     URL.revokeObjectURL(url);
     showMessage('イベントをエクスポートしました', 'success', 3000);
   } catch (error) {
-    console.error('エクスポートエラー:', error);
     showMessage('エクスポートに失敗しました。', 'error', 6000);
   }
 }
@@ -1844,6 +1597,22 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
+// 職場の色変更時に関連するイベントの色も更新
+function updateEventsColorForWorkplace(workplaceId) {
+  const workplace = workplaces.find(w => w.id === workplaceId);
+  if (!workplace) return;
+
+  // 指定された職場IDを持つイベントの色を更新
+  events.forEach(event => {
+    if (event.workplaceId === workplaceId) {
+      event.color = workplace.color || '#3b82f6';
+    }
+  });
+
+  // カレンダーを再描画
+  updateViews();
+}
+
 // ========== 職場管理機能 ==========
 
 // 職場データを読み込む
@@ -1862,9 +1631,9 @@ async function loadWorkplaces() {
       workplaces = Object.keys(data).map(key => ({
         id: key,
         name: data[key].name || '',
-        rate: data[key].rate || 0
+        rate: data[key].rate || 0,
+        color: data[key].color || '#3b82f6' // デフォルトの青色
       }));
-      console.log('Firebaseから職場データを読み込み:', workplaces.length, '件');
     } else {
       workplaces = [];
     }
@@ -1872,43 +1641,30 @@ async function loadWorkplaces() {
     updateWorkplaceSelect();
     renderWorkplacesList();
   } catch (error) {
-    console.error('職場データの読み込みに失敗しました:', error);
     workplaces = [];
   }
 }
 
 // 職場を追加
 async function addWorkplace(workplace) {
-  console.log('addWorkplace 呼び出し:', workplace);
-  console.log('Firebase接続状態:', checkFirebase());
   
   if (!checkFirebase()) {
-    console.log('Firebase未接続。ローカルに保存します');
     const id = generateId();
     workplaces.push({ ...workplace, id });
-    console.log('ローカルに保存しました。ID:', id);
     return id;
   }
   
   try {
-    console.log('Firebaseに保存します');
     const workplacesRef = window.firebase.ref(window.firebase.db, 'workplaces');
     const newRef = window.firebase.push(workplacesRef);
-    console.log('Firebase push 成功。ref key:', newRef.key);
     
     // set操作を実行（タイムアウト付きで安全に実行）
-    console.log('Firebase set操作を実行中...');
     await firebaseSetWithTimeout(newRef, workplace, 10000);
-    console.log('Firebase set 成功');
     
     const id = newRef.key;
-    console.log('職場ID:', id);
     workplaces.push({ ...workplace, id });
-    console.log('職場リストに追加しました。現在の職場数:', workplaces.length);
     return id;
   } catch (error) {
-    console.error('職場の追加に失敗しました:', error);
-    console.error('エラー詳細:', error.message, error.stack);
     throw error;
   }
 }
@@ -1920,9 +1676,10 @@ async function updateWorkplace(id, workplace) {
     if (index !== -1) {
       workplaces[index] = { ...workplace, id };
     }
+    updateEventsColorForWorkplace(id); // 職場の色変更時にイベントの色も更新
     return;
   }
-  
+
   try {
     const workplaceRef = window.firebase.ref(window.firebase.db, `workplaces/${id}`);
     await window.firebase.set(workplaceRef, workplace);
@@ -1930,8 +1687,8 @@ async function updateWorkplace(id, workplace) {
     if (index !== -1) {
       workplaces[index] = { ...workplace, id };
     }
+    updateEventsColorForWorkplace(id); // 職場の色変更時にイベントの色も更新
   } catch (error) {
-    console.error('職場の更新に失敗しました:', error);
     throw error;
   }
 }
@@ -1948,7 +1705,6 @@ async function deleteWorkplace(id) {
     await window.firebase.remove(workplaceRef);
     workplaces = workplaces.filter(w => w.id !== id);
   } catch (error) {
-    console.error('職場の削除に失敗しました:', error);
     throw error;
   }
 }
@@ -1988,6 +1744,10 @@ function renderWorkplacesList() {
       <div class="workplace-info">
         <div class="workplace-name">${escapeHtml(workplace.name)}</div>
         <div class="workplace-rate">時給: ${workplace.rate}円</div>
+        <div class="workplace-color">
+          <span class="color-dot" style="background-color: ${workplace.color || '#3b82f6'}"></span>
+          色: ${workplace.color || '#3b82f6'}
+        </div>
       </div>
       <div class="workplace-actions">
         <button class="btn btn-secondary edit-workplace-btn" data-id="${workplace.id}">編集</button>
@@ -2021,7 +1781,6 @@ function renderWorkplacesList() {
           updateWorkplaceSelect();
         } catch (error) {
           hideLoading();
-          console.error('職場削除エラー:', error);
           showMessage('職場の削除に失敗しました。', 'error', 6000);
         }
       }
@@ -2037,29 +1796,60 @@ function showWorkplaceModal(workplaceId = null) {
   const deleteBtn = safeGetElementById('deleteWorkplaceBtn');
   const nameInput = safeGetElementById('workplaceName');
   const rateInput = safeGetElementById('workplaceRate');
-  
-  if (!modal || !modalTitle || !form || !nameInput || !rateInput) {
-    console.error('Workplace modal required elements not found');
+  const colorInput = safeGetElementById('workplaceColor');
+
+  if (!modal || !modalTitle || !form || !nameInput || !rateInput || !colorInput) {
     return;
   }
-  
+
   editingWorkplaceId = workplaceId;
-  
+
   if (workplaceId) {
     const workplace = workplaces.find(w => w.id === workplaceId);
     if (!workplace) return;
-    
+
     modalTitle.textContent = '職場を編集';
     nameInput.value = workplace.name || '';
     rateInput.value = workplace.rate || '';
+    colorInput.value = workplace.color || '#3b82f6';
     if (deleteBtn) deleteBtn.style.display = 'block';
   } else {
     modalTitle.textContent = '職場を追加';
     nameInput.value = '';
     rateInput.value = '';
+    colorInput.value = '#3b82f6'; // デフォルトの青色
     if (deleteBtn) deleteBtn.style.display = 'none';
   }
-  
+
+  // 色選択のパレット機能を設定
+  const updateColorPaletteSelection = () => {
+    // パレットの選択状態を更新
+    const colorOptions = modal.querySelectorAll('.color-option');
+    const currentColor = colorInput.value.toLowerCase();
+
+    colorOptions.forEach(option => {
+      const optionColor = option.dataset.color.toLowerCase();
+      if (optionColor === currentColor) {
+        option.classList.add('selected');
+      } else {
+        option.classList.remove('selected');
+      }
+    });
+  };
+
+  // パレットクリックイベントを設定
+  const colorOptions = modal.querySelectorAll('.color-option');
+  colorOptions.forEach(option => {
+    eventListeners.add(option, 'click', () => {
+      const selectedColor = option.dataset.color;
+      colorInput.value = selectedColor;
+      updateColorPaletteSelection();
+    });
+  });
+
+  // 初期選択状態を設定
+  updateColorPaletteSelection();
+
   modal.classList.add('show');
   modal.setAttribute('aria-hidden', 'false');
 }
@@ -2240,7 +2030,6 @@ function updateTimeHistory() {
         }
       } catch (error) {
         hideLoading();
-        console.error('シフト追加エラー:', error);
         showMessage('シフトの追加に失敗しました。再度お試しください。', 'error', 6000);
       }
     });
@@ -2442,7 +2231,6 @@ function validateEvent(event) {
 
 // 初期化（combiと同じロジック）
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('アプリケーションを初期化中...');
   
   // Firebase接続チェック
   if (!checkFirebase()) {
@@ -2467,7 +2255,6 @@ document.addEventListener('DOMContentLoaded', function() {
   switchView('month');
   updateViews();
   
-  console.log('アプリケーション初期化完了');
 });
 
 window.addEventListener('beforeunload', () => {
@@ -2535,7 +2322,6 @@ function setupEventListeners() {
         currentDate = addMonths(currentDate, -1);
         updateViews();
       } catch (error) {
-        console.error('Error in prevMonth handler:', error);
         showMessage('月の移動に失敗しました。', 'error', 3000);
       }
     };
@@ -2549,7 +2335,6 @@ function setupEventListeners() {
         currentDate = addMonths(currentDate, 1);
         updateViews();
       } catch (error) {
-        console.error('Error in nextMonth handler:', error);
         showMessage('月の移動に失敗しました。', 'error', 3000);
       }
     };
@@ -2566,7 +2351,6 @@ function setupEventListeners() {
         currentDate = new Date();
         updateViews();
       } catch (error) {
-        console.error('Error in todayBtn handler:', error);
         showMessage('今日の日付への移動に失敗しました。', 'error', 3000);
       }
     };
@@ -2594,7 +2378,6 @@ function setupEventListeners() {
           closeEventModal();
         }
       } catch (error) {
-        console.error('Error in eventModal click handler:', error);
       }
     };
     eventListeners.add(eventModal, 'click', handler);
@@ -2610,7 +2393,6 @@ function setupEventListeners() {
         }
       }
     } catch (error) {
-      console.error('Error in ESC key handler:', error);
     }
   };
   eventListeners.add(document, 'keydown', escHandler);
@@ -2618,7 +2400,6 @@ function setupEventListeners() {
   // フォーム送信
   const eventForm = safeGetElementById('shiftForm');
   if (!eventForm) {
-    console.error('Event form not found');
     return;
   }
   
@@ -2689,7 +2470,7 @@ function setupEventListeners() {
         description: notes,
         startTime: startTime,
         endTime: `${date}T${end}`,
-        color: '#3b82f6', // デフォルトの青色
+        color: workplace.color || '#3b82f6', // 職場の色を使用
         // シフトデータも保持（互換性のため）
         date: date,
         start: start,
@@ -2761,7 +2542,6 @@ function setupEventListeners() {
       }
     } catch (error) {
       hideLoading();
-      console.error('シフト保存エラー:', error);
       showMessage('シフトの保存に失敗しました。再度お試しください。', 'error', 6000);
     } finally {
       delete eventForm.dataset.submitting;
@@ -2790,7 +2570,6 @@ function setupEventListeners() {
           }
         } catch (error) {
           hideLoading();
-          console.error('イベント削除エラー:', error);
           showMessage('イベントの削除に失敗しました。', 'error', 6000);
         }
       }
@@ -2807,7 +2586,6 @@ function setupEventListeners() {
       try {
         showWorkplaceModal();
       } catch (error) {
-        console.error('Error in addWorkplaceBtn handler:', error);
         showMessage('職場追加の表示に失敗しました。', 'error', 3000);
       }
     };
@@ -2823,14 +2601,11 @@ function setupEventListeners() {
   const workplaceSubmitBtn = workplaceForm ? workplaceForm.querySelector('button[type="submit"]') : null;
   
   if (workplaceForm) {
-    console.log('職場フォームが見つかりました。イベントリスナーを登録します。');
     const submitHandler = async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      console.log('職場フォーム送信イベントが発生しました');
       
       if (workplaceForm.dataset.submitting === 'true') {
-        console.log('既に送信処理中です');
         return;
       }
       workplaceForm.dataset.submitting = 'true';
@@ -2841,47 +2616,40 @@ function setupEventListeners() {
         const formData = new FormData(e.target);
         const name = sanitizeTextInput(formData.get('name') || '');
         const rate = Number(formData.get('rate')) || 0;
-        
-        console.log('フォームデータ:', { name, rate });
-        
+        const color = formData.get('color') || '#3b82f6';
+
+
         if (!name || name.trim() === '') {
           hideLoading();
           showMessage('職場名を入力してください。', 'error', 6000);
           delete workplaceForm.dataset.submitting;
           return;
         }
-        
+
         if (rate <= 0 || Number.isNaN(rate)) {
           hideLoading();
           showMessage('時給を正しく入力してください。', 'error', 6000);
           delete workplaceForm.dataset.submitting;
           return;
         }
-        
-        const workplace = { name: name.trim(), rate };
-        console.log('職場データを保存します:', workplace);
+
+        const workplace = { name: name.trim(), rate, color };
         
         let success = false;
         try {
           if (editingWorkplaceId) {
-            console.log('職場を更新します。ID:', editingWorkplaceId);
             await updateWorkplace(editingWorkplaceId, workplace);
-            console.log('職場の更新が完了しました');
             showMessage('職場を更新しました', 'success', 3000);
             success = true;
           } else {
-            console.log('職場を追加します');
             const newId = await addWorkplace(workplace);
-            console.log('職場を追加しました。ID:', newId);
             showMessage('職場を追加しました', 'success', 3000);
             success = true;
           }
         } catch (saveError) {
-          console.error('保存処理中にエラー:', saveError);
           throw saveError; // エラーを再スローしてcatchブロックで処理
         } finally {
           // 成功・失敗に関わらずローディングを非表示にする
-          console.log('ローディングを非表示にします');
           hideLoading();
           
           if (success) {
@@ -2891,26 +2659,20 @@ function setupEventListeners() {
           }
         }
       } catch (error) {
-        console.error('職場保存エラー:', error);
-        console.error('エラー詳細:', error.message, error.stack);
         showMessage(`職場の保存に失敗しました: ${error.message || '不明なエラー'}`, 'error', 6000);
       } finally {
         // 確実にローディングを非表示にする
-        console.log('finallyブロック: ローディングを非表示にします');
         hideLoading();
         delete workplaceForm.dataset.submitting;
-        console.log('フォーム送信処理を完了しました');
       }
     };
     eventListeners.add(workplaceForm, 'submit', submitHandler);
-    console.log('職場フォームのイベントリスナーを登録しました');
     
     // 念のため、送信ボタンにも直接イベントリスナーを追加
     if (workplaceSubmitBtn) {
       const buttonHandler = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        console.log('送信ボタンがクリックされました');
         // フォームのsubmitイベントを手動で発火
         if (workplaceForm) {
           const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
@@ -2918,10 +2680,8 @@ function setupEventListeners() {
         }
       };
       eventListeners.add(workplaceSubmitBtn, 'click', buttonHandler);
-      console.log('送信ボタンのイベントリスナーも登録しました');
     }
   } else {
-    console.error('職場フォームが見つかりませんでした');
   }
   
   const deleteWorkplaceBtn = safeGetElementById('deleteWorkplaceBtn');
@@ -2940,7 +2700,6 @@ function setupEventListeners() {
           updateWorkplaceSelect();
         } catch (error) {
           hideLoading();
-          console.error('職場削除エラー:', error);
           showMessage('職場の削除に失敗しました。', 'error', 6000);
         }
       }
@@ -2965,7 +2724,6 @@ function setupEventListeners() {
         }
         // 時間候補を更新
       } catch (error) {
-        console.error('Error in shiftWorkplaceSelect handler:', error);
       }
     };
     eventListeners.add(shiftWorkplaceSelect, 'change', handler);
