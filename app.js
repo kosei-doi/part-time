@@ -1636,6 +1636,20 @@ async function loadWorkplaces() {
     
     updateWorkplaceSelect();
     renderWorkplacesList();
+
+    // 職場データが読み込まれたら、既存シフトの色を更新
+    if (Array.isArray(events)) {
+      events.forEach(event => {
+        if (event.workplaceId) {
+          const workplace = workplaces.find(w => w.id === event.workplaceId);
+          if (workplace && workplace.color && workplace.color !== event.color) {
+            event.color = workplace.color;
+          }
+        }
+      });
+      // 色が更新されたらビューを再描画
+      updateViews();
+    }
   } catch (error) {
     workplaces = [];
   }
@@ -2226,31 +2240,31 @@ function validateEvent(event) {
 
 
 // 初期化（combiと同じロジック）
-document.addEventListener('DOMContentLoaded', function() {
-  
+document.addEventListener('DOMContentLoaded', async function() {
+
   // Firebase接続チェック
   if (!checkFirebase()) {
     showMessage('Firebaseに接続できません。設定を確認してから再読み込みしてください。', 'error', 6000);
     return;
   }
-  
+
+  // 職場データを先に読み込み（完了を待つ）
+  await loadWorkplaces();
+
   // シフトを読み込み
   loadEvents();
-  
-  // 職場データを読み込み
-  loadWorkplaces();
-  
+
   // イベントリスナーを登録
   setupEventListeners();
-  
+
   // タブ機能を初期化
   setupTabs();
-  
+
   // 月次ビューを表示
   currentView = 'month';
   switchView('month');
   updateViews();
-  
+
 });
 
 window.addEventListener('beforeunload', () => {
