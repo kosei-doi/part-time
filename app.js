@@ -193,9 +193,8 @@ async function deduplicateFirebaseEvents() {
 
 // Firebase set をタイムアウト付きで実行するヘルパー
 async function firebaseSetWithTimeout(ref, value, timeoutMs = 10000) {
-  const start = Date.now();
   try {
-    const result = await Promise.race([
+    return await Promise.race([
       window.firebase.set(ref, value),
       new Promise((_, reject) =>
         setTimeout(
@@ -204,10 +203,7 @@ async function firebaseSetWithTimeout(ref, value, timeoutMs = 10000) {
         )
       ),
     ]);
-    const duration = Date.now() - start;
-    return result;
   } catch (error) {
-    const duration = Date.now() - start;
     throw error;
   }
 }

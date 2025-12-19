@@ -29,8 +29,6 @@ Client-side HTML/CSS/JS dashboard for logging part-time shifts, recurring templa
 - **Local cache**: reload page before reconnecting—cached data should appear immediately; Firebase config textarea prefilled.
 - **Validation**: entering zero/negative durations or amounts shows inline alerts and prevents submission.
 
-## Usage Guide
-See [USAGE.md](USAGE.md) for detailed instructions on how to use all features of the app.
 
 ## Notes
 - Notifications require HTTPS context; desktop browsers may block alerts when the tab is unfocused.
